@@ -1,0 +1,30 @@
+digital-biomarker-monitor/
+
+README.md
+LICENSE
+
+docs/
+    architecture/
+    api/
+    database/
+    research/
+    literature/
+    roadmap/
+
+frontend/
+
+backend/
+
+database/
+
+feature_extractors/
+    voice/
+    vision/
+
+ai/
+
+tests/
+
+scripts/
+
+assets/
