@@ -1,12 +1,12 @@
 import React from 'react';
-import { Container } from '@/components/ui/Container';
-import { Section } from '@/components/ui/Section';
-import { Card, CardHeader, CardBody, CardFooter } from '@/components/ui/Card';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { useHealth } from '@/hooks/useHealth';
-import { TECHNICAL_STACK_METRICS, PIPELINE_FUTURE_MODULES } from '@/constants';
+import { Container } from '../components/ui/Container';
+import { Section } from '../components/ui/Section';
+import { Card, CardHeader, CardBody, CardFooter } from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/StatusBadge';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { useHealth } from '../hooks/useHealth';
+import { TECHNICAL_STACK_METRICS, PIPELINE_FUTURE_MODULES } from '../constants';
 
 export const HomePage: React.FC = () => {
   const { status, timestamp, version, recheckHealth } = useHealth();

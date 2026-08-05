@@ -1,8 +1,8 @@
 import React from 'react';
-import { Container } from '@/components/ui/Container';
-import { Section } from '@/components/ui/Section';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Alert } from '@/components/ui/Alert';
+import { Container } from '../components/ui/Container';
+import { Section } from '../components/ui/Section';
+import { Card, CardBody } from '../components/ui/Card';
+import { Alert } from '../components/ui/Alert';
 
 export const AboutPage: React.FC = () => {
   return (
@@ -54,3 +54,5 @@ export const AboutPage: React.FC = () => {
     </Container>
   );
 };
+
+export default AboutPage;
