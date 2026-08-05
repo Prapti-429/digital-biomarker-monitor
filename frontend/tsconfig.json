@@ -14,7 +14,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path Mapping */
+    /* Path Mapping & Compatibility */
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
