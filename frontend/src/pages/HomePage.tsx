@@ -6,7 +6,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { useHealth } from '../hooks/useHealth';
-import { TECHNICAL_STACK_METRICS, PIPELINE_FUTURE_MODULES } from '../constants';
+import { TECHNICAL_STACK_METRICS, PIPELINE_FUTURE_MODULES } from '..';
 
 export const HomePage: React.FC = () => {
   const { status, timestamp, version, recheckHealth } = useHealth();

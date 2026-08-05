@@ -14,7 +14,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path Mapping & Compatibility */
+    /* Silence deprecation warning & Path Mapping */
     "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
@@ -27,5 +27,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "src/index.ts"]
 }
