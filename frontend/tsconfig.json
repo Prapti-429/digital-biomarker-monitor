@@ -14,11 +14,9 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Silence deprecation warning & Path Mapping */
-    "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
+    /* Path Mapping without deprecated baseUrl */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
 
     /* Linting */
@@ -27,5 +25,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "src/index.ts"]
+  "include": ["src"]
 }
