@@ -67,3 +67,8 @@ class Settings(BaseSettings):
 
 # Global Singleton Settings Instance
 settings = Settings()
+
+print("=" * 80)
+print("DATABASE URI USED:")
+print(settings.SQLALCHEMY_DATABASE_URI)
+print("=" * 80)
