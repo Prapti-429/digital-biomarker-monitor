@@ -5,16 +5,16 @@
  * queuing to prevent parallel refresh race conditions.
  */
 
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios from 'axios';
 
-const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
-export const systemApi = {
-  async getHealthStatus(): Promise<{ status: string; timestamp: string }> {
-    const response = await api.get('/health');
-    return response.data;
+export const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
   },
-};
+});
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -35,14 +35,14 @@ const processQueue = (error: unknown, token: string | null = null): void => {
 
 // Request Interceptor: Attach Access Token
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  (config) => {
     const token = localStorage.getItem('access_token');
-    if (token && config.headers) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error: unknown) => Promise.reject(error)
+  (error) => Promise.reject(error)
 );
 
 // Response Interceptor: Handle 401 & Automatic Token Refresh Mutex
