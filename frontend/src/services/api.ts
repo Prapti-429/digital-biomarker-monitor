@@ -9,12 +9,12 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || '/api/v1';
 
-export const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
+export const systemApi = {
+  async getHealthStatus(): Promise<{ status: string; timestamp: string }> {
+    const response = await api.get('/health');
+    return response.data;
   },
-});
+};
 
 let isRefreshing = false;
 let failedQueue: Array<{

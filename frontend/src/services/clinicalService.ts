@@ -12,9 +12,7 @@ import {
   MedicationRegimen,
   VitalSigns,
   VitalSignsListResponse,
-  LabResult,
   LabResultListResponse,
-  SymptomLog,
   SymptomLogListResponse,
 } from '../types/clinical';
 
