@@ -1,22 +1,32 @@
 """
-Database Package Core Exports.
+Database Package Initialization.
 
-Provides a clean unified import interface for ORM DeclarativeBase, session factories,
-engine instances, dependencies, and database mixins.
+Exports ORM Base, models, and database models metadata
+for declarative resolution across the application.
 """
 
-from app.db.base import Base
-from app.db.health import check_db_health
-from app.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
-from app.db.session import SessionLocal, engine, get_db
+from models import Base
+from app.db.models.auth_models import (
+    Role,
+    Permission,
+    role_permissions,
+    user_roles,
+    UserSession,
+    RefreshToken,
+    PasswordResetToken,
+    EmailVerificationToken,
+)
+from app.db.models.audit_models import AuditLog
 
 __all__ = [
     "Base",
-    "engine",
-    "SessionLocal",
-    "get_db",
-    "check_db_health",
-    "UUIDPrimaryKeyMixin",
-    "TimestampMixin",
-    "SoftDeleteMixin",
+    "Role",
+    "Permission",
+    "role_permissions",
+    "user_roles",
+    "UserSession",
+    "RefreshToken",
+    "PasswordResetToken",
+    "EmailVerificationToken",
+    "AuditLog",
 ]

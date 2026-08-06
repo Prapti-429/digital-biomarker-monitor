@@ -1,55 +1,127 @@
 """
-API Route Dependencies.
+API Security Dependencies.
 
-Provides reusable FastAPI dependency functions for request-scoped database sessions,
-security context, and operational health checks.
+Provides FastAPI dependency functions for extracting and verifying JWT tokens,
+injecting authenticated user contexts, and enforcing RBAC/FGAC authorization guards.
 """
 
-import logging
-from typing import Generator
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
+from typing import Annotated, List, Optional
+from fastapi import Depends, Request
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import DatabaseConnectionError
-from app.db.health import check_db_health
-from app.db.session import get_db
+# Import database session dependency
+try:
+    from database import get_db
+except ImportError:
+    from ...database import get_db  # Relative import fallback
 
-logger = logging.getLogger(__name__)
+from app.db.models import User
+from app.core.jwt import JWTEngine, TokenPayload
+from app.core.exceptions import (
+    AccountDisabledException,
+    InsufficientPermissionError,
+    TokenRevokedError,
+)
+from app.repositories.user_repository import UserRepository
+from app.repositories.session_repository import SessionRepository
+from app.services.authorization_service import AuthorizationService
+from app.schemas.auth_enums import Permission, TokenType, UserRole
 
 
-def get_database_session() -> Generator[Session, None, None]:
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=True)
+
+
+def get_jwt_engine() -> JWTEngine:
+    """Dependency provider for the application JWTEngine instance."""
+    return JWTEngine(
+        secret_key="SUPER_SECRET_PRODUCTION_KEY_REPLACE_IN_ENV",
+        algorithm="HS256",
+        access_token_expire_minutes=15,
+        refresh_token_expire_days=7,
+    )
+
+
+def get_token_payload(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    jwt_engine: Annotated[JWTEngine, Depends(get_jwt_engine)],
+) -> TokenPayload:
     """
-    FastAPI dependency that wraps the session generator with exception translation.
-
-    Converts raw SQLAlchemy connection failures into clean HTTP exception responses
-    if the database is unreachable during request processing.
-
-    Yields:
-        Session: Request-scoped SQLAlchemy session instance.
+    Parses and verifies the OAuth2 Bearer Access Token.
+    Returns decoded TokenPayload claims.
     """
-    try:
-        yield from get_db()
-    except SQLAlchemyError as exc:
-        logger.error("Uncaught database exception in API route context: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database service temporarily unavailable.",
-        ) from exc
+    return jwt_engine.decode_token(token, expected_type=TokenType.ACCESS)
 
 
-def verify_db_connection() -> Session:
+def get_current_user(
+    payload: Annotated[TokenPayload, Depends(get_token_payload)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
     """
-    Dependency that performs an active health check before resolving a route.
-
-    Useful for critical endpoints that require confirmed database read/write access.
-
-    Returns:
-        Session: Active database session if health check passes.
+    Resolves the authenticated User record from the database.
+    Validates account state and session revocation.
     """
-    health = check_db_health()
-    if health.get("status") != "healthy":
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection verification failed: {health.get('message')}",
-        )
+    if payload.sid:
+        session_repo = SessionRepository(db)
+        session = session_repo.get_active_session(payload.sid)
+        if not session:
+            raise TokenRevokedError("Associated session is no longer active.")
+
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(int(payload.sub))
+
+    if not user.is_active:
+        raise AccountDisabledException()
+
+    return user
+
+
+class RequireRole:
+    """
+    Dependency callable guard that enforces Role-Based Access Control (RBAC).
+    """
+
+    def __init__(self, allowed_roles: List[UserRole] | UserRole) -> None:
+        if isinstance(allowed_roles, UserRole):
+            self.allowed_roles = [allowed_roles]
+        else:
+            self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: Annotated[User, Depends(get_current_user)]) -> User:
+        if current_user.role not in self.allowed_roles:
+            raise InsufficientPermissionError(
+                f"Required role in {[r.value for r in self.allowed_roles]}"
+            )
+        return current_user
+
+
+class RequirePermission:
+    """
+    Dependency callable guard that enforces Fine-Grained Access Control (FGAC).
+    """
+
+    def __init__(self, required_permission: Permission) -> None:
+        self.required_permission = required_permission
+
+    def __call__(
+        self,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[Session, Depends(get_db)],
+    ) -> User:
+        authz_service = AuthorizationService(db)
+        if not authz_service.has_permission(current_user.role, self.required_permission):
+            raise InsufficientPermissionError(self.required_permission.value)
+        return current_user
+
+
+def get_client_ip(request: Request) -> Optional[str]:
+    """Helper dependency to extract client IP address handling reverse proxies."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+def get_user_agent(request: Request) -> Optional[str]:
+    """Helper dependency to extract request User-Agent header."""
+    return request.headers.get("User-Agent")
