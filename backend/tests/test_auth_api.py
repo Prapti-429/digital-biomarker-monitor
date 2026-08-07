@@ -7,7 +7,11 @@ token rotation, and RBAC access boundaries.
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from app.db.models import User
+
+try:
+    from app.db.models import User
+except ImportError:
+    from models import User  # type: ignore
 
 
 def test_user_registration_success(client: TestClient) -> None:
@@ -82,4 +86,4 @@ def test_rbac_admin_endpoint_forbidden_for_patient(client: TestClient, test_pati
         "/api/v1/admin/users",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == status.HTTP_403_FORBIDDENP
+    assert response.status_code == status.HTTP_403_FORBIDDEN

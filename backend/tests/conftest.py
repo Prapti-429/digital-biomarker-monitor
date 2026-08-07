@@ -8,10 +8,10 @@ and pre-seeded test principals for authentication and RBAC testing.
 import sys
 from pathlib import Path
 
-# Force the parent 'backend' directory onto sys.path FIRST
-backend_dir = Path(__file__).resolve().parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
+# Force the parent 'backend' directory onto sys.path FIRST for Pytest runtime
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 from typing import Generator
 import pytest
@@ -20,21 +20,21 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Package & relative import fallbacks for absolute Pylance/Pytest safety
+# Module resolution with static type inspection overrides on both branches
 try:
-    from app.database import get_db  # type: ignore
+    from app.database import get_db  # type: ignore[import-not-found]
 except ImportError:
-    from database import get_db  # type: ignore
+    from database import get_db  # type: ignore[import-not-found]
 
 try:
-    from app.db.models import Base, User
+    from app.main import app  # type: ignore[import-not-found]
 except ImportError:
-    from models import Base, User  # type: ignore
+    from main import app  # type: ignore[import-not-found]
 
 try:
-    from app.main import app  # type: ignore
+    from app.db.models import Base, User  # type: ignore[import-not-found]
 except ImportError:
-    from main import app  # type: ignore
+    from models import Base, User  # type: ignore[import-not-found]
 
 from app.core.security import hash_password
 from app.schemas.auth_enums import UserRole

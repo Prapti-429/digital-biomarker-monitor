@@ -1,11 +1,8 @@
-/**
- * Axios HTTP API Client.
- *
- * Handles authorization header injection, 401 handling, and automatic token refresh
- * queuing to prevent parallel refresh race conditions.
- */
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-import axios from 'axios';
+export interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
@@ -16,101 +13,61 @@ export const api = axios.create({
   },
 });
 
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}> = [];
-
-const processQueue = (error: unknown, token: string | null = null): void => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else if (token) {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-// Request Interceptor: Attach Access Token
+// Request Interceptor: Attach JWT Access Token
 api.interceptors.request.use(
-  (config) => {
+  (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (token && config.headers) {
+      config.headers.set('Authorization', `Bearer ${token}`);
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error: AxiosError) => Promise.reject(error)
 );
 
-// Response Interceptor: Handle 401 & Automatic Token Refresh Mutex
+// Response Interceptor: Token Refresh & Auth Handling
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      if (
-        originalRequest.url?.includes('/auth/login') ||
-        originalRequest.url?.includes('/auth/refresh')
-      ) {
-        return Promise.reject(error);
-      }
-
-      if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token: string) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            return api(originalRequest);
-          })
-          .catch((err: unknown) => Promise.reject(err));
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
-
-      const refreshToken = localStorage.getItem('refresh_token');
-
-      if (!refreshToken) {
-        isRefreshing = false;
-        localStorage.clear();
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
 
       try {
-        const response = await axios.post<{ access_token: string; refresh_token: string }>(
-          `${API_BASE_URL}/auth/refresh`,
-          { refresh_token: refreshToken }
-        );
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
 
-        const { access_token, refresh_token: newRefreshToken } = response.data;
+          const newAccessToken = res.data.access_token;
+          localStorage.setItem('access_token', newAccessToken);
 
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', newRefreshToken);
+          if (originalRequest.headers) {
+            originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
+          }
 
-        if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          return api(originalRequest);
         }
-
-        processQueue(null, access_token);
-        return api(originalRequest);
-      } catch (refreshErr: unknown) {
-        processQueue(refreshErr, null);
-        localStorage.clear();
+      } catch (refreshError) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         window.location.href = '/login';
-        return Promise.reject(refreshErr);
-      } finally {
-        isRefreshing = false;
+        return Promise.reject(refreshError);
       }
     }
 
     return Promise.reject(error);
   }
 );
+
+// System Health API endpoint expected by HealthContext
+export const systemApi = {
+  async getHealthStatus(): Promise<{ status: string; timestamp: string }> {
+    const response = await api.get('/health');
+    return response.data;
+  },
+};
+
+export default api;
