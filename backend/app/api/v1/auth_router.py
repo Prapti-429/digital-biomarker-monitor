@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 try:
-    from database import get_db
+    from app.db.session import get_db
 except ImportError:
-    from ....database import get_db  # Relative import fallback
+    from app.db.session import get_db
 
 from app.db.models import User
 from app.core.jwt import JWTEngine, TokenPayload

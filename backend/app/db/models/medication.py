@@ -11,9 +11,9 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 try:
-    from app.database import Base
+    from app.db.base import Base
 except ImportError:
-    from database import Base  # type: ignore
+    from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.patient import PatientProfile

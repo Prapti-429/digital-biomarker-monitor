@@ -1,11 +1,12 @@
 """
 Database Package Initialization.
 
-Exports ORM Base, models, and database models metadata
-for declarative resolution across the application.
+Provides the SQLAlchemy declarative Base and selected database
+infrastructure/model exports.
 """
 
-from models import Base
+from app.db.base import Base
+
 from app.db.models.auth_models import (
     Role,
     Permission,
@@ -16,7 +17,9 @@ from app.db.models.auth_models import (
     PasswordResetToken,
     EmailVerificationToken,
 )
+
 from app.db.models.audit_models import AuditLog
+
 
 __all__ = [
     "Base",

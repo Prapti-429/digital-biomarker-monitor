@@ -7,7 +7,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models import AudioRecord, DailyCheckIn
+from app.db.models.audio_recording import AudioRecording
+from app.db.models.daily_check_in import DailyCheckIn
 from app.repositories.base import BaseRepository, RepositoryError
 
 

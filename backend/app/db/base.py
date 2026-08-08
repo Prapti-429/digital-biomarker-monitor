@@ -55,16 +55,3 @@ class TimestampMixin:
         nullable=False,
         doc="Timestamp when the record was last updated.",
     )
-
-
-# Import all ORM models here so Alembic detects them under Base.metadata
-from app.db.models import (  # noqa: F401, E402
-    AudioRecording,
-    BiomarkerFeature,
-    DailyCheckIn,
-    HealthStabilityScore,
-    PatientProfile,
-    SymptomReport,
-    User,
-    VideoRecording,
-)

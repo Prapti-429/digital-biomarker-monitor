@@ -19,11 +19,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models import Base
+from app.db.base import Base
 
 if TYPE_CHECKING:
-    from models import User
-
+    from app.db.models.user import User
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)

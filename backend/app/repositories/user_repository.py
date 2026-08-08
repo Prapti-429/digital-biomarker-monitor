@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models import User
+from app.db.models.user import User
 from app.repositories.base import BaseRepository, EntityNotFoundError, RepositoryError
 
 

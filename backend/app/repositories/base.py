@@ -21,11 +21,12 @@ from typing import (
 from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy import select, update, delete, func, or_, and_, Tuple as SQLTuple
-from sqlalchemy.orm import Session, ORMOption, selectinload, joinedload
+from sqlalchemy.orm import Session, selectinload, joinedload
+from sqlalchemy.orm.interfaces import ORMOption
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 # Import ORM declarative base
-from app.models import Base
+from app.db.base import Base
 
 # Type variables for Generic Repository
 ModelType = TypeVar("ModelType", bound=Base)
@@ -291,6 +292,8 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return self.session.execute(stmt).scalar() or 0
         except SQLAlchemyError as e:
             raise RepositoryError(f"Error counting {self._get_entity_name()} records", e)
+
+
 
     # -------------------------------------------------------------------------
     # Pagination, Filtering, & Sorting Operations

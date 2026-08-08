@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from database import get_db
+from app.db.session import get_db
 from app.db.models import User
 from app.api.dependencies import RequireRole
 from app.services.audit_service import AuditService

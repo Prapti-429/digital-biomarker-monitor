@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models import VideoRecord, DailyCheckIn
+from app.db.models.video_recording import VideoRecording
+from app.db.models.daily_check_in import DailyCheckIn
 from app.repositories.base import BaseRepository, RepositoryError
 
 

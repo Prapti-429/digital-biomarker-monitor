@@ -20,7 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models import Base
+from app.db.base import Base
 
 
 def utc_now() -> datetime:

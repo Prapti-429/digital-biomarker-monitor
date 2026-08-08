@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
 try:
-    from app.database import get_db  # type: ignore[import-not-found]
+    from app.db.session import get_db
 except ImportError:
-    from database import get_db  # type: ignore[import-not-found]
+    from app.db.session import get_db
 
 from app.db.models import User
 from app.db.models.file_upload import FileUploadRecord

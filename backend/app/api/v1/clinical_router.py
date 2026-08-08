@@ -11,9 +11,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 try:
-    from app.database import get_db
+    from app.db.session import get_db
 except ImportError:
-    from database import get_db  # type: ignore
+    from app.db.session import get_db
 
 from app.db.models import User
 from app.api.dependencies import get_current_user, get_client_ip, RequireRole

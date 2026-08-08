@@ -8,7 +8,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models import DailyCheckIn
+from app.db.models.daily_check_in import DailyCheckIn
 from app.repositories.base import BaseRepository, EntityNotFoundError, RepositoryError
 
 
