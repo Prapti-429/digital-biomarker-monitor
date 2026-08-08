@@ -1,10 +1,12 @@
 import { useContext } from 'react';
-import { HealthContext } from '../contexts/HealthContext';
+import { HealthContext, HealthContextType } from '../contexts/HealthContext';
 
-export const useHealth = () => {
+export const useHealth = (): HealthContextType => {
   const context = useContext(HealthContext);
-  if (context === undefined) {
-    throw new Error('useHealth must be instantiated within a valid structural HealthProvider layer.');
+  if (!context) {
+    throw new Error('useHealth must be used within a HealthProvider');
   }
   return context;
 };
+
+export default useHealth;

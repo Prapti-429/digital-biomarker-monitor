@@ -2,7 +2,7 @@ import React from 'react';
 import { Container } from '../components/ui/Container';
 import { Section } from '../components/ui/Section';
 import { Card, CardHeader, CardBody, CardFooter } from '../components/ui/Card';
-import { StatusBadge } from '../components/ui/StatusBadge';
+import { StatusBadge, ConnectionStatus } from '../components/ui/StatusBadge';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { useHealth } from '../hooks/useHealth';
@@ -27,7 +27,7 @@ export const HomePage: React.FC = () => {
             <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">
               System Release Frame: v{version || '2026.1.0'}
             </span>
-            <StatusBadge status={status} />
+            <StatusBadge status={(status || 'offline') as ConnectionStatus} />
           </div>
         </div>
 
@@ -56,7 +56,7 @@ export const HomePage: React.FC = () => {
                   variant="outline" 
                   size="sm" 
                   onClick={recheckHealth}
-                  isLoading={status === 'LOADING'}
+                  isLoading={status === 'connecting' || (status as string) === 'LOADING'}
                 >
                   Verify Channel Alignment
                 </Button>
