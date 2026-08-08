@@ -1,29 +1,36 @@
 import React from 'react';
-import { ConnectionStatus } from '../../types/api';
+export type ConnectionStatus = 'online' | 'offline' | 'connecting' | 'LOADING' | 'UNKNOWN' | string;
 
-interface StatusBadgeProps {
+export interface StatusBadgeProps {
   status: ConnectionStatus;
+  className?: string;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const configurations = {
-    LOADING: 'bg-slate-100 text-slate-700 border-slate-200 animate-pulse',
-    CONNECTED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    UNAVAILABLE: 'bg-red-100 text-red-800 border-red-200',
-  };
-
-  const labels = {
-    LOADING: 'Verifying System Node...',
-    CONNECTED: 'Platform Active',
-    UNAVAILABLE: 'Data Node Offline',
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
+  const getStatusStyles = (s: string) => {
+    switch (s?.toLowerCase()) {
+      case 'online':
+      case 'connected':
+      case 'healthy':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'connecting':
+      case 'loading':
+        return 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse';
+      case 'offline':
+      case 'error':
+      default:
+        return 'bg-rose-100 text-rose-800 border-rose-300';
+    }
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${configurations[status]}`}>
-      <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
-        status === 'CONNECTED' ? 'bg-emerald-500' : status === 'UNAVAILABLE' ? 'bg-red-500' : 'bg-slate-400'
-      }`} />
-      {labels[status]}
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border uppercase tracking-wider ${getStatusStyles(
+        status
+      )} ${className}`}
+    >
+      <span className="h-1.5 w-1.5 mr-1.5 rounded-full bg-current"></span>
+      {status || 'OFFLINE'}
     </span>
   );
 };
