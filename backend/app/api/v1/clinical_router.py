@@ -94,7 +94,11 @@ def get_patient_vitals_history(
     dependencies=[
         Depends(
             RequireRole(
-                [UserRole.ADMINISTRATOR, UserRole.ADMIN, UserRole.CLINICIAN, UserRole.DOCTOR, UserRole.RESEARCHER]
+               [
+    UserRole.ADMINISTRATOR,
+    UserRole.CLINICIAN,
+    UserRole.RESEARCHER,
+]
             )
         )
     ],

@@ -1,14 +1,14 @@
 """
 Health Stability Score ORM Model.
 
-Stores aggregated longitudinal AI inferences for a daily session.
+Stores aggregated AI/rule-based clinical stability metrics derived from daily telemetry.
 """
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 import uuid
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 class HealthStabilityScore(Base, UUIDMixin, TimestampMixin):
     """
-    Consolidated health stability index and machine learning assessment result.
+    Composite health stability score generated per monitoring session.
     """
 
     __tablename__ = "health_stability_scores"
@@ -28,48 +28,50 @@ class HealthStabilityScore(Base, UUIDMixin, TimestampMixin):
     check_in_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("daily_check_ins.id", ondelete="CASCADE"),
-        unique=True,
         nullable=False,
+        unique=True,
         index=True,
-        doc="Foreign key linking to the parent daily check-in session.",
+        doc="Foreign key linking to the daily check-in session.",
     )
     overall_score: Mapped[float] = mapped_column(
         Float,
         nullable=False,
-        doc="Normalized health stability index score (e.g., 0.0 to 100.0).",
+        doc="Composite score ranging from 0.0 (critical) to 100.0 (optimal).",
     )
     trend_category: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        index=True,
-        doc="Directional longitudinal trajectory (e.g., stable, improving, declining).",
+        default="STABLE",
+        doc="Categorical indicator (e.g., IMPROVING, STABLE, DEGRADING, CRITICAL).",
     )
     confidence: Mapped[float] = mapped_column(
         Float,
         nullable=False,
-        doc="Model statistical confidence metric (0.0 to 1.0).",
+        default=1.0,
+        doc="Algorithm confidence score (0.0 - 1.0).",
     )
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        doc="Timestamp when inference analysis was generated.",
+        doc="Timestamp when the score calculation completed.",
     )
     explanation_summary: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        doc="Human-readable explanation or model interpretability rationale.",
+        doc="Human-readable explanation of key contributing factors.",
     )
+    # Dialect-agnostic JSON: Uses JSON in SQLite (pytest) & JSONB in PostgreSQL (production)
     model_metadata: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
-        doc="Model checkpoint version, input parameters, or SHAP attribution metrics.",
+        doc="Model versioning, factor weights, and raw feature inputs.",
     )
 
     # Relationships
     daily_check_in: Mapped["DailyCheckIn"] = relationship(
         "DailyCheckIn",
         back_populates="health_stability_score",
-        doc="Parent daily check-in session reference.",
+        doc="Associated daily check-in session.",
     )
 
     def __repr__(self) -> str:

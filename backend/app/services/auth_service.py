@@ -19,8 +19,9 @@ from app.core.exceptions import (
     AccountDisabledException,
     InvalidTokenError,
     TokenRevokedError,
-    DuplicateEntityError,
 )
+
+from app.repositories.base import DuplicateEntityError
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.services.authorization_service import AuthorizationService

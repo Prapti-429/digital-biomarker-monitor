@@ -35,7 +35,10 @@ router = APIRouter(prefix="/medications", tags=["Medication Management"])
     status_code=status.HTTP_201_CREATED,
     summary="Prescribe a new medication regimen (Clinician / Admin only)",
     dependencies=[
-        Depends(RequireRole([UserRole.ADMINISTRATOR, UserRole.ADMIN, UserRole.CLINICIAN, UserRole.DOCTOR]))
+        Depends(RequireRole([
+    UserRole.ADMINISTRATOR,
+    UserRole.CLINICIAN,
+]))
     ],
 )
 def create_medication_regimen(

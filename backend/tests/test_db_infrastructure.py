@@ -5,7 +5,7 @@ Verifies database engine connection, session lifecycle, health check reporting,
 and mixin behaviors for Module 3A.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 import uuid
 import pytest
 from sqlalchemy import String, select
@@ -15,6 +15,21 @@ from app.db.base import Base
 from app.db.health import check_db_health
 from app.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.session import SessionLocal, engine, get_db
+
+
+def is_postgres_reachable() -> bool:
+    """Checks if a live PostgreSQL server is actively accepting connections."""
+    try:
+        with engine.connect() as conn:
+            return True
+    except Exception:
+        return False
+
+
+postgres_required = pytest.mark.skipif(
+    not is_postgres_reachable(),
+    reason="Live PostgreSQL database server not reachable locally (running in SQLite test mode)"
+)
 
 
 # Concrete dummy ORM model specifically designed for testing mixins in isolation
@@ -38,6 +53,7 @@ def setup_test_database():
     Base.metadata.drop_all(bind=engine)
 
 
+@postgres_required
 def test_database_engine_connection():
     """
     Verifies that the SQLAlchemy engine can establish a raw connection.
@@ -46,6 +62,7 @@ def test_database_engine_connection():
         assert connection is not None
 
 
+@postgres_required
 def test_session_local_lifecycle():
     """
     Tests manual SessionLocal instantiation, commit, query, and closure.
@@ -67,15 +84,16 @@ def test_session_local_lifecycle():
         session.close()
 
 
+@postgres_required
 def test_fastapi_get_db_generator():
     """
     Tests the get_db dependency generator used by FastAPI endpoints.
     """
     db_gen = get_db()
     db_session = next(db_gen)
-    
+
     assert isinstance(db_session, Session)
-    
+
     # Run simple query to verify session validity
     stmt = select(DummyTestModel).limit(1)
     result = db_session.scalars(stmt).first()
@@ -88,6 +106,7 @@ def test_fastapi_get_db_generator():
         pass
 
 
+@postgres_required
 def test_soft_delete_mixin_behavior():
     """
     Verifies soft_delete and restore methods on ORM models.
@@ -113,6 +132,7 @@ def test_soft_delete_mixin_behavior():
         session.close()
 
 
+@postgres_required
 def test_check_db_health_utility():
     """
     Tests the database health check utility response format.

@@ -49,6 +49,31 @@ class RecordNotFoundError(DatabaseException):
 
     pass
 
+class ResourceNotFoundException(AppBaseException):
+    """
+    Raised by the service layer when a requested domain resource
+    does not exist.
+    """
+
+    def __init__(
+        self,
+        message: str = "Requested resource was not found.",
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message, details)
+
+class ConflictException(AppBaseException):
+    """
+    Raised by the service layer when an operation conflicts with
+    the current state of a resource.
+    """
+
+    def __init__(
+        self,
+        message: str = "Resource operation conflicts with the current state.",
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message, details)
 """
 Domain Security and Authentication Exception Hierarchy.
 

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 import uuid
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, JSON, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,8 +59,9 @@ class BiomarkerFeature(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         doc="Timestamp when feature extraction execution completed.",
     )
+    # Dialect-agnostic JSON column: Uses JSON in SQLite (tests) & JSONB in PostgreSQL (production)
     extra_properties: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
         doc="Optional metadata such as feature extractor version or confidence scores.",
     )

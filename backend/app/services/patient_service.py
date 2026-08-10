@@ -157,7 +157,7 @@ class PatientService:
         If a clinician requests the roster, default filter scopes to their assigned cohort.
         """
         # If actor is a clinician and clinician_id filter is unsupplied, default to actor's ID
-        if actor_role in (UserRole.CLINICIAN, UserRole.DOCTOR) and clinician_id is None:
+        if actor_role == UserRole.CLINICIAN and clinician_id is None:
             clinician_id = actor_id
 
         items, total, pages = self.patient_repo.search_patients(

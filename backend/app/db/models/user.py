@@ -56,12 +56,12 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     patient_profile: Mapped[Optional["PatientProfile"]] = relationship(
-        "PatientProfile",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-        doc="One-to-one clinical profile for the participant.",
-    )
+    "PatientProfile",
+    back_populates="user",
+    foreign_keys="PatientProfile.user_id",
+    uselist=False,
+    cascade="all, delete-orphan",
+)
     daily_check_ins: Mapped[List["DailyCheckIn"]] = relationship(
         "DailyCheckIn",
         back_populates="user",

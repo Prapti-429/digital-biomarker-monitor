@@ -20,7 +20,7 @@ from app.schemas.user_schemas import UserAdminUpdate, UserListResponse, UserRead
 router = APIRouter(
     prefix="/admin",
     tags=["Admin Management"],
-    dependencies=[Depends(RequireRole([UserRole.ADMINISTRATOR, UserRole.ADMIN]))],
+    dependencies=[Depends(RequireRole([UserRole.ADMINISTRATOR]))],
 )
 
 

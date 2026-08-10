@@ -12,17 +12,17 @@ from app.db.models.daily_check_in import DailyCheckIn
 from app.repositories.base import BaseRepository, RepositoryError
 
 
-class AudioRepository(BaseRepository[AudioRecord, Any, Any]):
+class AudioRepository(BaseRepository[AudioRecording, Any, Any]):
     """
     Repository class handling audio media file recordings.
     """
 
     def __init__(self, session: Session) -> None:
-        super().__init__(AudioRecord, session)
+        super().__init__(AudioRecording, session)
 
     def create_audio_record(
         self, audio_data: Dict[str, Any], auto_commit: bool = True
-    ) -> AudioRecord:
+    ) -> AudioRecording:
         """
         Persist a new audio recording reference.
         """
@@ -30,7 +30,7 @@ class AudioRepository(BaseRepository[AudioRecord, Any, Any]):
 
     def update_processing_status(
         self, audio_id: int, status: str, details: Optional[Dict[str, Any]] = None
-    ) -> AudioRecord:
+    ) -> AudioRecording:
         """
         Update the downstream processing state of an audio file.
         """
@@ -51,16 +51,16 @@ class AudioRepository(BaseRepository[AudioRecord, Any, Any]):
                 f"Failed to update processing status for Audio record {audio_id}", e
             )
 
-    def get_audio_history(self, patient_id: int) -> List[AudioRecord]:
+    def get_audio_history(self, patient_id: int) -> List[AudioRecording]:
         """
         Retrieve all audio recordings associated with a given patient.
         """
         try:
             stmt = (
-                select(AudioRecord)
-                .join(DailyCheckIn, AudioRecord.check_in_id == DailyCheckIn.id)
+                select(AudioRecording)
+                .join(DailyCheckIn, AudioRecording.check_in_id == DailyCheckIn.id)
                 .where(DailyCheckIn.patient_id == patient_id)
-                .order_by(AudioRecord.created_at.desc())
+                .order_by(AudioRecording.created_at.desc())
             )
             return list(self.session.execute(stmt).scalars().all())
         except SQLAlchemyError as e:

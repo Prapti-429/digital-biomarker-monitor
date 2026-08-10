@@ -1,5 +1,5 @@
 """
-Symptom Repository for managing logged symptom instances and analytical trend queries.
+SymptomLog Repository for managing logged symptom instances and analytical trend queries.
 """
 
 from typing import List, Any, Dict, Optional
@@ -8,19 +8,20 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models import Symptom, DailyCheckIn
+from app.db.models.symptoms import SymptomLog
+from app.db.models.daily_check_in import DailyCheckIn
 from app.repositories.base import BaseRepository, RepositoryError
 
 
-class SymptomRepository(BaseRepository[Symptom, Any, Any]):
+class SymptomRepository(BaseRepository[SymptomLog, Any, Any]):
     """
     Repository class handling symptom monitoring metrics and severity tracking.
     """
 
     def __init__(self, session: Session) -> None:
-        super().__init__(Symptom, session)
+        super().__init__(SymptomLog, session)
 
-    def create_symptom(self, symptom_data: Dict[str, Any], auto_commit: bool = True) -> Symptom:
+    def create_symptom(self, symptom_data: Dict[str, Any], auto_commit: bool = True) -> SymptomLog:
         """
         Attach a logged symptom entry to a check-in session.
         """
@@ -37,12 +38,12 @@ class SymptomRepository(BaseRepository[Symptom, Any, Any]):
         """
         try:
             stmt = (
-                select(Symptom.severity_score, DailyCheckIn.check_in_date)
-                .join(DailyCheckIn, Symptom.check_in_id == DailyCheckIn.id)
+                select(SymptomLog.severity_score, DailyCheckIn.check_in_date)
+                .join(DailyCheckIn, SymptomLog.check_in_id == DailyCheckIn.id)
                 .where(
                     and_(
                         DailyCheckIn.patient_id == patient_id,
-                        Symptom.symptom_name.ilike(f"%{symptom_name}%"),
+                        SymptomLog.symptom_name.ilike(f"%{symptom_name}%"),
                     )
                 )
             )
@@ -62,12 +63,12 @@ class SymptomRepository(BaseRepository[Symptom, Any, Any]):
                 f"Error calculating symptom trends for Patient {patient_id}", e
             )
 
-    def get_historical_symptoms(self, check_in_ids: List[int]) -> List[Symptom]:
+    def get_historical_symptoms(self, check_in_ids: List[int]) -> List[SymptomLog]:
         """
         Fetch all symptoms recorded across a set of check-in IDs.
         """
         try:
-            stmt = select(Symptom).where(Symptom.check_in_id.in_(check_in_ids))
+            stmt = select(SymptomLog).where(SymptomLog.check_in_id.in_(check_in_ids))
             return list(self.session.execute(stmt).scalars().all())
         except SQLAlchemyError as e:
             raise RepositoryError("Error executing historical symptom query", e)

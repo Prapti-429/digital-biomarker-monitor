@@ -122,7 +122,11 @@ def update_patient_profile(
     dependencies=[
         Depends(
             RequireRole(
-                [UserRole.ADMINISTRATOR, UserRole.ADMIN, UserRole.CLINICIAN, UserRole.DOCTOR, UserRole.RESEARCHER]
+                [
+    UserRole.ADMINISTRATOR,
+    UserRole.CLINICIAN,
+    UserRole.RESEARCHER,
+]
             )
         )
     ],

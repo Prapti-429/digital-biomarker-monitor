@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, List, Optional
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, String, JSON
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,7 +56,7 @@ class DailyCheckIn(Base, UUIDMixin, TimestampMixin):
         doc="Exact timestamp when the daily check-in was finalized.",
     )
     extra_metadata: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
         doc="Extensible JSON payload for device parameters or environment conditions.",
     )

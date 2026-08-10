@@ -8,10 +8,14 @@ and pre-seeded test principals for authentication and RBAC testing.
 import sys
 from pathlib import Path
 
-# Force the parent 'backend' directory onto sys.path FIRST for Pytest runtime
+# Add backend directory to sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+# Patch Passlib's internal bcrypt bug detector before loading passlib handlers
+import passlib.handlers.bcrypt
+passlib.handlers.bcrypt.detect_wrap_bug = lambda identifier: False
 
 from typing import Generator
 import pytest
@@ -19,12 +23,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import JSONB
 
-# Module resolution with static type inspection overrides on both branches
-try:
-    from app.database import get_db  # type: ignore[import-not-found]
-except ImportError:
-    from database import get_db  # type: ignore[import-not-found]
+@compiles(JSONB, "sqlite")
+def compile_jsonb_for_sqlite(type_, compiler, **kw):
+    return "JSON"
+
+# Application Imports with Pylance resolution hints
+from app.db.session import get_db
+from app.db.base import Base
 
 try:
     from app.main import app  # type: ignore[import-not-found]
@@ -32,12 +40,19 @@ except ImportError:
     from main import app  # type: ignore[import-not-found]
 
 try:
-    from app.db.models import Base, User  # type: ignore[import-not-found]
+    from app.db.models import User  # type: ignore[import-not-found]
 except ImportError:
-    from models import Base, User  # type: ignore[import-not-found]
+    from db.models import User  # type: ignore[import-not-found]
 
-from app.core.security import hash_password
-from app.schemas.auth_enums import UserRole
+try:
+    from app.core.security import hash_password  # type: ignore[import-not-found]
+except ImportError:
+    from core.security import hash_password  # type: ignore[import-not-found]
+
+try:
+    from app.schemas.auth_enums import UserRole  # type: ignore[import-not-found]
+except ImportError:
+    from schemas.auth_enums import UserRole  # type: ignore[import-not-found]
 
 
 # In-memory SQLite engine for isolated test execution
