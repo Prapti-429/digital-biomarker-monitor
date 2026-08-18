@@ -10,13 +10,11 @@ from sqlalchemy import String, Text, Date, DateTime, Float, Integer, Boolean, Fo
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-try:
-    from app.db.base import Base
-except ImportError:
-    from app.db.base import Base
+from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.patient import PatientProfile
+    from app.db.models.user import User
 
 
 class MedicationRegimen(Base):
@@ -26,23 +24,24 @@ class MedicationRegimen(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patient_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    
+
     medication_name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     drug_class: Mapped[str] = mapped_column(String(100), default="Tyrosine Kinase Inhibitor", nullable=False)
     dose: Mapped[str] = mapped_column(String(50), nullable=False)
     dose_value_mg: Mapped[float] = mapped_column(Float, nullable=False)
     frequency: Mapped[str] = mapped_column(String(50), nullable=False)
     route: Mapped[str] = mapped_column(String(50), default="Oral", nullable=False)
-    
+
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
     missed_dose_counter: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     adherence_percentage: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)
-    
-    prescribing_clinician_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+
+    # User.id is UUID. This foreign key must use the same UUID type.
+    prescribing_clinician_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     side_effects_noted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
