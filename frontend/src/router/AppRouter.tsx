@@ -6,7 +6,7 @@ import { ProtectedRoute } from '../components/common/ProtectedRoute';
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const BiomarkersPage = lazy(() => import('../pages/BiomarkersPage').then(m => ({ default: m.BiomarkersPage })));
 const TrendsPage = lazy(() => import('../pages/TrendsPage').then(m => ({ default: m.TrendsPage })));
-const TimelinePage = lazy(() => import('../pages/TimelinePage').then(m => ({ default: m.TrendsPage })));
+const TimelinePage = lazy(() => import('../pages/TimelinePage').then(m => ({ default: m.TimelinePage })));
 const CheckInPage = lazy(() => import('../pages/CheckInAIPage').then(m => ({ default: m.CheckInAIPage })));
 const ReportsPage = lazy(() => import('../pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
