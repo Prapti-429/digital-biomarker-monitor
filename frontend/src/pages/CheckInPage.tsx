@@ -1,496 +1,395 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { aiService, AIAnalysisResponse } from '../services/aiService';
+
+const MOOD_VALUES: Record<string, number> = {
+  better: 0.1,
+  same: 0,
+  different: 0.5,
+  significant: 1,
+};
+
+const SYMPTOMS = [
+  'Vocal strain',
+  'Motor stiffness',
+  'Tremor sensations',
+  'Facial tightness',
+  'Brain fog',
+  'Sleep disruption',
+];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+async function analyzeAudio(blob: Blob): Promise<{
+  rms: number;
+  zcr: number;
+  pitch: number;
+  speechActivity: number;
+}> {
+  const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) throw new Error('Web Audio is not supported by this browser.');
+
+  const context = new AudioContextCtor();
+  try {
+    const buffer = await context.decodeAudioData(await blob.arrayBuffer());
+    const channel = buffer.getChannelData(0);
+    const step = Math.max(1, Math.floor(channel.length / 200000));
+    const samples: number[] = [];
+    for (let i = 0; i < channel.length; i += step) samples.push(channel[i]);
+
+    let sumSquares = 0;
+    let crossings = 0;
+    let active = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      const value = samples[i];
+      sumSquares += value * value;
+      if (i > 0 && ((samples[i - 1] < 0 && value >= 0) || (samples[i - 1] >= 0 && value < 0))) crossings += 1;
+    }
+
+    const rms = Math.sqrt(sumSquares / Math.max(samples.length, 1));
+    const zcr = crossings / Math.max(samples.length - 1, 1);
+    const frameSize = Math.max(256, Math.floor(buffer.sampleRate * 0.025));
+    const hop = Math.max(128, Math.floor(buffer.sampleRate * 0.010));
+    let frames = 0;
+    let activeFrames = 0;
+    let pitchSum = 0;
+    let pitchCount = 0;
+
+    for (let start = 0; start + frameSize < channel.length; start += hop) {
+      let energy = 0;
+      for (let j = 0; j < frameSize; j += 1) {
+        const x = channel[start + j];
+        energy += x * x;
+      }
+      const frameRms = Math.sqrt(energy / frameSize);
+      frames += 1;
+      if (frameRms > Math.max(rms * 0.35, 0.01)) {
+        activeFrames += 1;
+        const minLag = Math.floor(buffer.sampleRate / 400);
+        const maxLag = Math.floor(buffer.sampleRate / 70);
+        let bestLag = 0;
+        let bestCorrelation = -Infinity;
+        for (let lag = minLag; lag <= Math.min(maxLag, frameSize - 1); lag += 1) {
+          let corr = 0;
+          for (let j = 0; j < frameSize - lag; j += 4) corr += channel[start + j] * channel[start + j + lag];
+          if (corr > bestCorrelation) {
+            bestCorrelation = corr;
+            bestLag = lag;
+          }
+        }
+        if (bestLag > 0) {
+          const candidate = buffer.sampleRate / bestLag;
+          if (candidate >= 70 && candidate <= 400) {
+            pitchSum += candidate;
+            pitchCount += 1;
+          }
+        }
+      }
+    }
+
+    return {
+      rms: Number(rms.toFixed(6)),
+      zcr: Number(clamp(zcr, 0, 1).toFixed(6)),
+      pitch: Number((pitchCount ? pitchSum / pitchCount : 180).toFixed(2)),
+      speechActivity: Number((frames ? activeFrames / frames : 0).toFixed(4)),
+    };
+  } finally {
+    await context.close();
+  }
+}
 
 export const CheckInPage: React.FC = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<number>(1);
-
-  // Step 1: Subjective & Symptoms
-  const [mood, setMood] = useState<string>('same');
-  const [fatigue, setFatigue] = useState<number>(2);
+  const [step, setStep] = useState(1);
+  const [mood, setMood] = useState('same');
+  const [fatigue, setFatigue] = useState(2);
   const [symptoms, setSymptoms] = useState<string[]>([]);
 
-  // Step 2: Voice
-  const [isVoiceRecording, setIsVoiceRecording] = useState<boolean>(false);
-  const [voiceRecorded, setVoiceRecorded] = useState<boolean>(false);
-  const [voiceSeconds, setVoiceSeconds] = useState<number>(0);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const [voiceRecorded, setVoiceRecorded] = useState(false);
+  const [voiceSeconds, setVoiceSeconds] = useState(0);
+  const [voiceFeatures, setVoiceFeatures] = useState<Awaited<ReturnType<typeof analyzeAudio>> | null>(null);
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceChunksRef = useRef<Blob[]>([]);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
 
-  // Step 3: Face / Camera
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [cameraActive, setCameraActive] = useState<boolean>(false);
-  const [isFaceCapturing, setIsFaceCapturing] = useState<boolean>(false);
-  const [faceCaptured, setFaceCaptured] = useState<boolean>(false);
-  const [faceSeconds, setFaceSeconds] = useState<number>(0);
+  const [faceCapturing, setFaceCapturing] = useState(false);
+  const [faceCaptured, setFaceCaptured] = useState(false);
+  const [faceSeconds, setFaceSeconds] = useState(0);
+  const [faceMotion, setFaceMotion] = useState<number | null>(null);
+  const [faceLuminanceVariability, setFaceLuminanceVariability] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Voice recording timer simulation
-  useEffect(() => {
-    let interval: any;
-    if (isVoiceRecording) {
-      interval = setInterval(() => {
-        setVoiceSeconds((prev) => {
-          if (prev >= 10) {
-            setIsVoiceRecording(false);
-            setVoiceRecorded(true);
-            return 10;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isVoiceRecording]);
+  const [analysis, setAnalysis] = useState<AIAnalysisResponse | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // Face recording timer simulation
-  useEffect(() => {
-    let interval: any;
-    if (isFaceCapturing) {
-      interval = setInterval(() => {
-        setFaceSeconds((prev) => {
-          if (prev >= 10) {
-            setIsFaceCapturing(false);
-            setFaceCaptured(true);
-            return 10;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isFaceCapturing]);
+  const stopVoiceStream = useCallback(() => {
+    voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
+    voiceStreamRef.current = null;
+  }, []);
 
-  // Camera cleanup and initiation on Step 3
-  const startCamera = async () => {
+  const startVoiceRecording = async () => {
+    setAnalysisError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      voiceChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) voiceChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(voiceChunksRef.current, { type: recorder.mimeType });
+        try {
+          setVoiceFeatures(await analyzeAudio(blob));
+          setVoiceRecorded(true);
+        } catch (error) {
+          console.error(error);
+          setAnalysisError('The voice sample was recorded, but acoustic feature extraction failed. You can continue without voice features.');
+          setVoiceRecorded(true);
+        } finally {
+          stopVoiceStream();
+        }
+      };
+      recorder.start(250);
+      voiceRecorderRef.current = recorder;
+      setVoiceSeconds(0);
+      setVoiceRecording(true);
+    } catch (error) {
+      console.error(error);
+      setAnalysisError('Microphone permission was not available. You can continue with the other monitoring signals.');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') voiceRecorderRef.current.stop();
+    voiceRecorderRef.current = null;
+    setVoiceRecording(false);
+  };
+
+  useEffect(() => {
+    if (!voiceRecording) return;
+    const timer = window.setInterval(() => {
+      setVoiceSeconds((current) => {
+        if (current >= 10) {
+          stopVoiceRecording();
+          return 10;
+        }
+        return current + 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [voiceRecording]);
+
+  const stopCamera = useCallback(() => {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    setCameraStream(null);
+    setFaceCapturing(false);
+  }, [cameraStream]);
+
+  const startCamera = useCallback(async () => {
     setCameraError(null);
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-          audio: false,
-        });
-        setCameraStream(stream);
-        setCameraActive(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } else {
-        setCameraError('Camera access not supported in this browser environment.');
-      }
-    } catch (err: any) {
-      console.warn('Camera permission issue:', err);
-      setCameraError('Camera permission denied or camera device unavailable. Simulator active.');
-      setCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+      setCameraStream(stream);
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (error) {
+      console.error(error);
+      setCameraError('Camera permission was not available. The AI analysis can still use the survey and voice signals.');
     }
-  };
-
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-      setCameraStream(null);
-    }
-    setCameraActive(false);
-  };
+  }, []);
 
   useEffect(() => {
-    if (step === 3) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => {
-      stopCamera();
-    };
-  }, [step]);
+    if (step === 3) startCamera();
+    else stopCamera();
+    return () => stopCamera();
+  }, [step, startCamera, stopCamera]);
 
-  const toggleSymptom = (sym: string) => {
-    setSymptoms((prev) =>
-      prev.includes(sym) ? prev.filter((s) => s !== sym) : [...prev, sym]
-    );
+  const captureFaceFeatures = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return;
+    canvas.width = 160;
+    canvas.height = 120;
+    const frames: number[] = [];
+    const luminances: number[] = [];
+    let previous: Uint8ClampedArray | null = null;
+    const started = performance.now();
+    setFaceCapturing(true);
+    setFaceSeconds(0);
+
+    while (performance.now() - started < 10000) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let luminanceSum = 0;
+      let difference = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const luminance = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+        luminanceSum += luminance;
+        if (previous) difference += Math.abs(luminance - (0.2126 * previous[i] + 0.7152 * previous[i + 1] + 0.0722 * previous[i + 2]));
+      }
+      frames.push(difference / (canvas.width * canvas.height * 255));
+      luminances.push(luminanceSum / (canvas.width * canvas.height * 255));
+      previous = new Uint8ClampedArray(pixels);
+      setFaceSeconds(Math.min(10, Math.floor((performance.now() - started) / 1000)));
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
+
+    const meanMotion = frames.reduce((a, b) => a + b, 0) / Math.max(frames.length, 1);
+    const meanLum = luminances.reduce((a, b) => a + b, 0) / Math.max(luminances.length, 1);
+    const lumVariance = Math.sqrt(luminances.reduce((sum, value) => sum + (value - meanLum) ** 2, 0) / Math.max(luminances.length, 1));
+    setFaceMotion(Number(meanMotion.toFixed(6)));
+    setFaceLuminanceVariability(Number(lumVariance.toFixed(6)));
+    setFaceCaptured(true);
+    setFaceCapturing(false);
   };
 
-  const handleFinish = () => {
-    stopCamera();
-    navigate('/dashboard');
+  const finishAnalysis = async () => {
+    setAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const result = await aiService.analyze({
+        fatigue,
+        mood_deviation: MOOD_VALUES[mood] ?? 0,
+        symptom_burden: symptoms.length / SYMPTOMS.length,
+        ...(voiceFeatures
+          ? {
+              voice_rms: voiceFeatures.rms,
+              voice_zero_crossing_rate: voiceFeatures.zcr,
+              voice_pitch_hz: voiceFeatures.pitch,
+              voice_speech_activity: voiceFeatures.speechActivity,
+            }
+          : {}),
+        ...(faceMotion !== null ? { face_motion: faceMotion } : {}),
+        ...(faceLuminanceVariability !== null ? { face_luminance_variability: faceLuminanceVariability } : {}),
+        source_duration_seconds: Math.max(voiceSeconds, faceSeconds),
+      });
+      setAnalysis(result);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.status === 401) {
+        navigate('/login');
+        return;
+      }
+      setAnalysisError(error?.message || 'AI analysis could not be completed. Please try the check-in again.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  useEffect(() => () => {
+    stopVoiceStream();
+    cameraStream?.getTracks().forEach((track) => track.stop());
+  }, [cameraStream, stopVoiceStream]);
+
+  const toggleSymptom = (symptom: string) => {
+    setSymptoms((current) => current.includes(symptom) ? current.filter((item) => item !== symptom) : [...current, symptom]);
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 py-4">
-      {/* Progress Header */}
       <div>
         <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
           <span>STEP {step} OF 4</span>
           <span className="uppercase font-semibold text-sky-400">
-            {step === 1 && '1. Subjective State & Symptoms'}
-            {step === 2 && '2. Acoustic Phonation Sample'}
-            {step === 3 && '3. Facial Dynamics & Micro-Symmetry'}
-            {step === 4 && '4. Synthesis & Verification'}
+            {step === 1 && '1. Subjective state & symptoms'}
+            {step === 2 && '2. Acoustic phonation sample'}
+            {step === 3 && '3. Facial dynamics'}
+            {step === 4 && '4. AI synthesis & verification'}
           </span>
         </div>
         <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div
-            className="bg-gradient-to-r from-sky-400 to-teal-400 h-full transition-all duration-300 rounded-full"
-            style={{ width: `${(step / 4) * 100}%` }}
-          />
+          <div className="bg-gradient-to-r from-sky-400 to-teal-400 h-full transition-all duration-300" style={{ width: `${(step / 4) * 100}%` }} />
         </div>
       </div>
 
-      {/* STEP 1: SUBJECTIVE & SYMPTOMS */}
+      {analysisError && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{analysisError}</div>}
+
       {step === 1 && (
-        <div className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
+        <section className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
           <div>
             <h2 className="text-xl font-bold text-white">How are you feeling today?</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Select your subjective state compared to your ongoing longitudinal baseline.
-            </p>
+            <p className="text-xs text-slate-400 mt-1">The model compares today's observations with your own longitudinal baseline.</p>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              { id: 'better', label: 'Better than baseline', desc: 'Higher energy, clearer focus' },
-              { id: 'same', label: 'About the same', desc: 'Steady state, consistent with baseline' },
-              { id: 'different', label: 'A little different', desc: 'Mild shift in sensation or fatigue' },
-              { id: 'significant', label: 'Noticeably different', desc: 'Pronounced variation observed' },
-            ].map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setMood(opt.id)}
-                className={`p-4 rounded-xl text-left border transition-all ${
-                  mood === opt.id
-                    ? 'bg-sky-500/10 border-sky-500 text-sky-200'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <div className="font-semibold text-sm">{opt.label}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{opt.desc}</div>
+              ['better', 'Better than baseline'],
+              ['same', 'About the same'],
+              ['different', 'A little different'],
+              ['significant', 'Noticeably different'],
+            ].map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setMood(id)} className={`p-4 rounded-xl text-left border ${mood === id ? 'bg-sky-500/10 border-sky-500 text-sky-200' : 'bg-slate-900/60 border-slate-800 text-slate-300'}`}>
+                <div className="font-semibold text-sm">{label}</div>
               </button>
             ))}
           </div>
-
-          {/* Fatigue Slider */}
           <div className="pt-4 border-t border-slate-800 space-y-2">
-            <div className="flex justify-between text-xs text-slate-300 font-medium">
-              <span>Fatigue & Muscle Exhaustion Index</span>
-              <span className="font-mono text-sky-400 font-bold">{fatigue} / 10</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={fatigue}
-              onChange={(e) => setFatigue(Number(e.target.value))}
-              className="w-full accent-sky-400 bg-slate-800 h-2 rounded-lg cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>0 (None)</span>
-              <span>5 (Moderate)</span>
-              <span>10 (Severe)</span>
-            </div>
+            <div className="flex justify-between text-xs text-slate-300"><span>Fatigue index</span><span className="font-mono text-sky-400 font-bold">{fatigue} / 10</span></div>
+            <input type="range" min="0" max="10" value={fatigue} onChange={(e) => setFatigue(Number(e.target.value))} className="w-full accent-sky-400" />
           </div>
-
-          {/* Quick Symptoms Multi-Select */}
           <div className="pt-4 border-t border-slate-800 space-y-3">
-            <label className="block text-xs font-medium text-slate-300">
-              Select any specific observations today (optional):
-            </label>
+            <label className="block text-xs font-medium text-slate-300">Observations today (optional)</label>
             <div className="flex flex-wrap gap-2">
-              {[
-                'Vocal strain',
-                'Motor stiffness',
-                'Tremor sensations',
-                'Facial tightness',
-                'Brain fog',
-                'Sleep disruption',
-              ].map((sym) => (
-                <button
-                  key={sym}
-                  type="button"
-                  onClick={() => toggleSymptom(sym)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                    symptoms.includes(sym)
-                      ? 'bg-teal-500/20 border-teal-400 text-teal-300'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {symptoms.includes(sym) ? '✓ ' : '+ '}
-                  {sym}
-                </button>
-              ))}
+              {SYMPTOMS.map((symptom) => <button key={symptom} type="button" onClick={() => toggleSymptom(symptom)} className={`px-3 py-1.5 rounded-lg text-xs border ${symptoms.includes(symptom) ? 'bg-teal-500/20 border-teal-400 text-teal-300' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>{symptoms.includes(symptom) ? '✓ ' : '+ '}{symptom}</button>)}
             </div>
           </div>
-
-          <div className="flex justify-end pt-4">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm transition-all shadow-md"
-            >
-              Continue to Voice &rarr;
-            </button>
-          </div>
-        </div>
+          <div className="flex justify-end"><button type="button" onClick={() => setStep(2)} className="bg-gradient-to-r from-sky-500 to-teal-500 text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm">Continue to Voice →</button></div>
+        </section>
       )}
 
-      {/* STEP 2: VOICE SAMPLE */}
       {step === 2 && (
-        <div className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
-          <div>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Vocal Acoustic Sample</h2>
-              <span className="text-xs font-mono bg-slate-800 px-2.5 py-1 rounded text-sky-400">
-                16kHz Raw Extraction
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Read the standardized passage aloud at your natural rhythm and volume.
-            </p>
-          </div>
-
-          {/* Reading Prompt */}
-          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm leading-relaxed italic text-center">
-            "The clear morning sunlight illuminated the quiet autumn woods, revealing subtle shifts in the landscape."
-          </div>
-
-          {/* Waveform and Recorder */}
+        <section className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
+          <div><h2 className="text-xl font-bold text-white">Vocal acoustic sample</h2><p className="text-xs text-slate-400 mt-1">Your browser extracts acoustic features locally; the raw recording is not uploaded by this check-in.</p></div>
+          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm leading-relaxed italic text-center">“The clear morning sunlight illuminated the quiet autumn woods, revealing subtle shifts in the landscape.”</div>
           <div className="flex flex-col items-center justify-center py-6 space-y-4">
-            {/* Visualizer bars */}
-            <div className="flex items-center gap-1.5 h-12">
-              {[40, 65, 85, 30, 95, 70, 45, 80, 60, 90, 50, 75, 35, 60, 85].map((h, i) => (
-                <div
-                  key={i}
-                  className={`w-1.5 rounded-full transition-all duration-150 ${
-                    isVoiceRecording
-                      ? 'bg-sky-400 animate-pulse'
-                      : voiceRecorded
-                      ? 'bg-emerald-400'
-                      : 'bg-slate-700'
-                  }`}
-                  style={{
-                    height: isVoiceRecording ? `${Math.max(15, (h * (Math.random() + 0.3)) % 48)}px` : '12px',
-                  }}
-                />
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (isVoiceRecording) {
-                  setIsVoiceRecording(false);
-                  setVoiceRecorded(true);
-                } else {
-                  setVoiceSeconds(0);
-                  setIsVoiceRecording(true);
-                }
-              }}
-              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-                isVoiceRecording
-                  ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/30'
-                  : voiceRecorded
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400'
-                  : 'bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md shadow-sky-500/20'
-              }`}
-            >
-              {isVoiceRecording ? (
-                <div className="w-5 h-5 bg-white rounded-sm" />
-              ) : voiceRecorded ? (
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 02-3 3z" />
-                </svg>
-              )}
+            <button type="button" onClick={voiceRecording ? stopVoiceRecording : startVoiceRecording} className={`w-20 h-20 rounded-full flex items-center justify-center ${voiceRecording ? 'bg-rose-500 text-white animate-pulse' : voiceRecorded ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400' : 'bg-sky-500 text-slate-950'}`}>
+              {voiceRecording ? <div className="w-5 h-5 bg-white rounded-sm" /> : voiceRecorded ? '✓' : '🎙'}
             </button>
-
-            <span className="text-xs text-slate-400 font-mono">
-              {isVoiceRecording
-                ? `Recording speech: ${voiceSeconds}s / 10s`
-                : voiceRecorded
-                ? `Voice sample calibrated (${voiceSeconds}s)`
-                : 'Click microphone to record 10-second sample'}
-            </span>
+            <span className="text-xs text-slate-400 font-mono">{voiceRecording ? `Recording: ${voiceSeconds}s / 10s` : voiceRecorded ? 'Acoustic features extracted' : 'Record a 10-second sample'}</span>
+            {voiceFeatures && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-[11px] text-slate-400"><div><b className="text-white block">{voiceFeatures.rms.toFixed(4)}</b>RMS</div><div><b className="text-white block">{voiceFeatures.zcr.toFixed(3)}</b>ZCR</div><div><b className="text-white block">{voiceFeatures.pitch.toFixed(0)} Hz</b>Pitch proxy</div><div><b className="text-white block">{(voiceFeatures.speechActivity * 100).toFixed(0)}%</b>Speech activity</div></div>}
           </div>
-
-          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              &larr; Back to Symptoms
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              disabled={!voiceRecorded && !isVoiceRecording}
-              className="bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 disabled:opacity-40 disabled:pointer-events-none text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm transition-all"
-            >
-              Continue to Facial Dynamics &rarr;
-            </button>
-          </div>
-        </div>
+          <div className="flex justify-between pt-4 border-t border-slate-800"><button type="button" onClick={() => setStep(1)} className="text-xs text-slate-400">← Back</button><button type="button" onClick={() => setStep(3)} disabled={voiceRecording} className="bg-gradient-to-r from-sky-500 to-teal-500 disabled:opacity-40 text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm">Continue to Face →</button></div>
+        </section>
       )}
 
-      {/* STEP 3: FACIAL DYNAMICS & CAMERA */}
       {step === 3 && (
-        <div className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
-          <div>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Facial Dynamics & Micro-Symmetry</h2>
-              <span className="text-xs font-mono bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2.5 py-1 rounded">
-                Camera Telemetry
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Position your face in the target frame and hold a neutral, comfortable posture for 10 seconds.
-            </p>
-          </div>
-
-          {/* Camera Viewport & Overlay */}
+        <section className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
+          <div><h2 className="text-xl font-bold text-white">Facial dynamics & motion</h2><p className="text-xs text-slate-400 mt-1">The browser measures frame-to-frame motion and luminance variability. It does not identify you or diagnose a condition.</p></div>
           <div className="relative aspect-video max-w-md mx-auto rounded-2xl bg-black overflow-hidden border border-slate-700 flex items-center justify-center">
-            {cameraStream ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
-            ) : (
-              <div className="text-center p-6 space-y-3">
-                <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-xs text-slate-400 font-mono">
-                  {cameraError || 'Initializing video sensor...'}
-                </p>
-              </div>
-            )}
-
-            {/* Target mesh overlay */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div
-                className={`w-44 h-56 rounded-[45%] border-2 transition-all duration-300 ${
-                  isFaceCapturing
-                    ? 'border-sky-400 animate-pulse shadow-[0_0_25px_rgba(14,165,233,0.35)]'
-                    : faceCaptured
-                    ? 'border-emerald-400'
-                    : 'border-slate-500/60 border-dashed'
-                }`}
-              />
-            </div>
-
-            {/* In-viewport timer/badge */}
-            {isFaceCapturing && (
-              <div className="absolute top-3 right-3 bg-red-500/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-mono text-white flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                <span>Capturing {faceSeconds}s / 10s</span>
-              </div>
-            )}
+            {cameraStream ? <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" /> : <div className="text-center p-6 text-slate-400 text-sm">Camera unavailable. You can continue with the other signals.</div>}
+            <canvas ref={canvasRef} className="hidden" />
           </div>
-
-          {/* Capture Controls */}
-          <div className="flex flex-col items-center justify-center space-y-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (isFaceCapturing) {
-                  setIsFaceCapturing(false);
-                  setFaceCaptured(true);
-                } else {
-                  setFaceSeconds(0);
-                  setIsFaceCapturing(true);
-                }
-              }}
-              className={`px-6 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                isFaceCapturing
-                  ? 'bg-rose-500 text-white'
-                  : faceCaptured
-                  ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400'
-                  : 'bg-sky-500 hover:bg-sky-400 text-slate-950'
-              }`}
-            >
-              {isFaceCapturing ? (
-                <span>Stop Visual Sampling ({faceSeconds}s)</span>
-              ) : faceCaptured ? (
-                <span>✓ Facial Dynamics Captured</span>
-              ) : (
-                <span>Start 10s Facial Sampling</span>
-              )}
-            </button>
-            <p className="text-[11px] text-slate-500">
-              Evaluates spontaneous blink rate, eye aspect ratio, and bilateral micro-symmetry.
-            </p>
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              &larr; Back to Voice
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(4)}
-              disabled={!faceCaptured && !isFaceCapturing}
-              className="bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 disabled:opacity-40 disabled:pointer-events-none text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm transition-all"
-            >
-              Continue to Review &rarr;
-            </button>
-          </div>
-        </div>
+          {cameraError && <p className="text-xs text-amber-300 text-center">{cameraError}</p>}
+          <div className="flex flex-col items-center gap-3"><button type="button" onClick={captureFaceFeatures} disabled={!cameraStream || faceCapturing || faceCaptured} className="bg-teal-500 disabled:opacity-40 text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm">{faceCapturing ? `Capturing ${faceSeconds}s / 10s` : faceCaptured ? '✓ Facial motion captured' : 'Capture 10-second sample'}</button>{faceCaptured && <div className="grid grid-cols-2 gap-6 text-center text-xs text-slate-400"><div><b className="text-white block">{faceMotion?.toFixed(5)}</b>Frame motion</div><div><b className="text-white block">{faceLuminanceVariability?.toFixed(5)}</b>Luminance variability</div></div>}</div>
+          <div className="flex justify-between pt-4 border-t border-slate-800"><button type="button" onClick={() => setStep(2)} className="text-xs text-slate-400">← Back</button><button type="button" onClick={() => setStep(4)} disabled={faceCapturing} className="bg-gradient-to-r from-sky-500 to-teal-500 disabled:opacity-40 text-slate-950 font-semibold px-6 py-2.5 rounded-xl text-sm">Review & Analyze →</button></div>
+        </section>
       )}
 
-      {/* STEP 4: REVIEW & SYNTHESIS */}
       {step === 4 && (
-        <div className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 text-center shadow-xl">
-          <div className="w-14 h-14 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center mx-auto">
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-bold text-white">Daily Check-in Complete</h2>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
-              Your multimodal session has been processed and synthesized with your 30-day longitudinal baseline profile.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 text-left text-xs space-y-3 font-mono text-slate-300">
-            <div className="flex justify-between border-b border-slate-800 pb-2">
-              <span className="text-slate-500">Subjective Mood:</span>
-              <span className="text-sky-400 font-semibold capitalize">{mood}</span>
-            </div>
-            <div className="flex justify-between border-b border-slate-800 pb-2">
-              <span className="text-slate-500">Fatigue Index:</span>
-              <span className="text-sky-400 font-semibold">{fatigue} / 10</span>
-            </div>
-            <div className="flex justify-between border-b border-slate-800 pb-2">
-              <span className="text-slate-500">Acoustic Speech Stream:</span>
-              <span className="text-emerald-400 font-semibold">10s Captured (3.8 syll/s baseline)</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Facial Kinematics:</span>
-              <span className="text-emerald-400 font-semibold">16 blinks/min (Symmetry: 99.2%)</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleFinish}
-            className="w-full bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-bold py-3.5 rounded-xl text-sm transition-all shadow-lg hover:shadow-sky-500/20"
-          >
-            Merge with Baseline & Return to Dashboard
-          </button>
-        </div>
+        <section className="rounded-2xl bg-[#111827] border border-slate-800 p-6 sm:p-8 space-y-6 shadow-xl">
+          {!analysis ? <>
+            <div><span className="text-xs font-mono text-sky-400">PERSONALIZED AI INFERENCE</span><h2 className="text-2xl font-bold text-white mt-1">Synthesize today's signals</h2><p className="text-sm text-slate-400 mt-2">The model compares today's survey, acoustic and facial-motion features with your longitudinal baseline.</p></div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs"><div className="rounded-xl bg-slate-900 border border-slate-800 p-4"><span className="text-slate-500">Fatigue</span><b className="block text-white mt-1">{fatigue}/10</b></div><div className="rounded-xl bg-slate-900 border border-slate-800 p-4"><span className="text-slate-500">Symptoms</span><b className="block text-white mt-1">{symptoms.length}</b></div><div className="rounded-xl bg-slate-900 border border-slate-800 p-4"><span className="text-slate-500">Modalities</span><b className="block text-white mt-1">{2 + (voiceFeatures ? 1 : 0) + (faceMotion !== null ? 1 : 0)}</b></div></div>
+            <button type="button" onClick={finishAnalysis} disabled={analyzing} className="w-full bg-gradient-to-r from-sky-500 to-teal-500 disabled:opacity-50 text-slate-950 font-bold py-3 rounded-xl">{analyzing ? 'Running personalized AI analysis…' : 'Run AI analysis'}</button>
+          </> : <>
+            <div className="flex items-start justify-between gap-4"><div><span className="text-xs font-mono text-teal-400">AI ANALYSIS COMPLETE</span><h2 className="text-2xl font-bold text-white mt-1">Your monitoring result</h2></div><span className="px-3 py-1 rounded-full bg-slate-800 text-xs text-slate-300">{analysis.trend}</span></div>
+            <div className="rounded-2xl bg-gradient-to-br from-sky-950/50 to-teal-950/30 border border-sky-500/20 p-6 text-center"><div className="text-6xl font-black text-white">{analysis.overall_score.toFixed(0)}</div><div className="text-slate-400 text-sm">/ 100 observational stability score</div><div className="text-xs text-slate-500 mt-2">Confidence {(analysis.confidence * 100).toFixed(0)}% · {analysis.baseline_observations} baseline observations</div></div>
+            <p className="text-sm text-slate-300 leading-relaxed">{analysis.explanation}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{analysis.features.map((feature) => <div key={feature.name} className="rounded-xl bg-slate-900 border border-slate-800 p-4"><div className="text-xs text-slate-500 uppercase">{feature.category}</div><div className="text-sm text-white mt-1">{feature.name.replace(/_/g, ' ')}</div>{feature.deviation !== null && feature.deviation !== undefined && <div className="text-xs text-slate-400 mt-1">Baseline deviation: {feature.deviation.toFixed(2)} SD-like units</div>}</div>)}</div>
+            <div className="flex justify-end"><button type="button" onClick={() => navigate('/dashboard')} className="bg-gradient-to-r from-sky-500 to-teal-500 text-slate-950 font-semibold px-6 py-2.5 rounded-xl">Go to dashboard →</button></div>
+          </>}
+        </section>
       )}
     </div>
   );
