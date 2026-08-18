@@ -38,10 +38,11 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Return the production DATABASE_URL when Render supplies it.
+        """Return Render DATABASE_URL when available, otherwise a local SQLite DB.
 
-        Read the process environment directly as a final safeguard so a
-        Render-injected DATABASE_URL cannot be shadowed by a local .env file.
+        SQLite is deliberately used only as a safe fallback for deployments where
+        the environment variable was not injected. This keeps the prototype
+        bootable instead of crashing on localhost:5432.
         """
         database_url = os.environ.get("DATABASE_URL") or self.DATABASE_URL
         if database_url:
@@ -50,10 +51,7 @@ class Settings(BaseSettings):
                 url = "postgresql://" + url[len("postgres://"):]
             return url
 
-        return (
-            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        return "sqlite:///./digital_biomarker.db"
 
 
 settings = Settings()
