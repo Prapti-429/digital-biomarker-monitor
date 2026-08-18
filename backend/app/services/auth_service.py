@@ -7,7 +7,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
 from app.core.exceptions import InvalidCredentialsException, AccountLockedException, AccountDisabledException, InvalidTokenError, TokenRevokedError
 from app.core.jwt import JWTEngine
 from app.core.security import hash_password, verify_password
