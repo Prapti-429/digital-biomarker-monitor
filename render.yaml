@@ -1,13 +1,10 @@
 services:
-  # ---------------------------------------------------------------------------
-  # 1. FastAPI Backend Web Service
-  # ---------------------------------------------------------------------------
   - type: web
     name: digital-biomarker-backend
     env: python
     region: oregon
     buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
@@ -22,9 +19,6 @@ services:
       - key: ENVIRONMENT
         value: production
 
-  # ---------------------------------------------------------------------------
-  # 2. React Vite Frontend Static Site
-  # ---------------------------------------------------------------------------
   - type: web
     name: digital-biomarker-frontend
     env: static
@@ -39,9 +33,6 @@ services:
         source: /*
         destination: /index.html
 
-# -----------------------------------------------------------------------------
-# 3. Managed PostgreSQL Database Instance
-# -----------------------------------------------------------------------------
 databases:
   - name: digital-biomarker-db
     databaseName: biomarker_db
