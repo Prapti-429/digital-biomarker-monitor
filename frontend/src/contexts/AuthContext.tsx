@@ -22,6 +22,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const loadCurrentUser = async (): Promise<User> => {
+  const response = await apiClient.get('/auth/me');
+  return response.data as User;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('nuvyra_token'));
@@ -32,12 +37,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedToken = localStorage.getItem('nuvyra_token');
       if (storedToken) {
         try {
-          // apiClient already includes /api/v1 in its base URL.
-          const response = await apiClient.get('/auth/me');
-          setUser(response.data);
+          const currentUser = await loadCurrentUser();
+          setUser(currentUser);
           setToken(storedToken);
         } catch {
           localStorage.removeItem('nuvyra_token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
           setToken(null);
           setUser(null);
         }
@@ -50,20 +56,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.post('/auth/login', { email, password });
-    const { access_token, user: userData } = response.data;
+    const { access_token } = response.data;
 
     if (!access_token) {
       throw new Error('Login succeeded but the server did not return an access token.');
     }
 
     localStorage.setItem('nuvyra_token', access_token);
+    localStorage.setItem('access_token', access_token);
     setToken(access_token);
-    setUser(userData);
+
+    // Login returns tokens only. Fetch the authenticated user separately.
+    const currentUser = await loadCurrentUser();
+    setUser(currentUser);
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
-    // Registration endpoint returns the newly-created UserRead object, not a token.
-    // Authenticate immediately afterwards so a new user can enter the dashboard.
+    // Registration returns UserRead, not JWT tokens. Authenticate immediately
+    // afterwards so the newly-created user is taken directly into the app.
     const response = await apiClient.post('/auth/register', {
       email,
       password,
@@ -71,21 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const registeredUser = response.data as User;
-
     if (!registeredUser?.id) {
       throw new Error('Account was created but the server returned an invalid user record.');
     }
 
-    const loginResponse = await apiClient.post('/auth/login', { email, password });
-    const { access_token, user: userData } = loginResponse.data;
-
-    if (!access_token) {
-      throw new Error('Account was created but automatic sign-in failed because no access token was returned.');
-    }
-
-    localStorage.setItem('nuvyra_token', access_token);
-    setToken(access_token);
-    setUser(userData || registeredUser);
+    await login(email, password);
   };
 
   const logout = () => {
