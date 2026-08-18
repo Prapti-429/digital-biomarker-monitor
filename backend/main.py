@@ -10,9 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.db.base import Base
 from app.db.session import engine
-from app.db import models  # noqa: F401 - register all ORM models
 from app.middlewares.security import SecurityHeadersMiddleware
 from app.middlewares.timing import ProcessTimingMiddleware
 
@@ -22,13 +20,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifecycle.
+
+    Database schema management belongs to Alembic (the Render start command
+    runs ``alembic upgrade head`` before Uvicorn). The application must not call
+    ``Base.metadata.create_all`` at runtime because that bypasses migrations and
+    can attempt to create stale/incompatible foreign keys in production.
+    """
     logger.info("Starting up %s (v%s)...", settings.PROJECT_NAME, settings.VERSION)
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized successfully.")
-    except Exception:
-        logger.exception("Database initialization failed.")
-        raise
     yield
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
     engine.dispose()
@@ -68,7 +67,13 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
-    return {"name": settings.PROJECT_NAME, "version": settings.VERSION, "docs": "/docs", "api_prefix": settings.API_V1_STR}
+    return {
+        "name": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "status": "running",
+        "docs": "/docs",
+        "api_prefix": settings.API_V1_STR,
+    }
 
 
 @app.get("/health", tags=["Health"])
