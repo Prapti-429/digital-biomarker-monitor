@@ -1,16 +1,9 @@
-"""
-Application Services Package Initialization.
-Exports services for auth, user management, RBAC, and audit logging.
+"""Application service package.
+
+Service modules are intentionally not imported here. Importing concrete
+services from package initialization creates import-time side effects and can
+introduce circular imports between FastAPI dependencies and authentication.
+Import the required service directly from its module instead.
 """
 
-from app.services.audit_service import AuditService
-from app.services.authorization_service import AuthorizationService
-from app.services.user_service import UserService
-from app.services.auth_service import AuthenticationService
-
-__all__ = [
-    "AuditService",
-    "AuthorizationService",
-    "UserService",
-    "AuthenticationService",
-]
+__all__: list[str] = []
