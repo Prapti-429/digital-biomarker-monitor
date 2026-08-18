@@ -22,22 +22,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the database schema and keep the API available."""
     logger.info("Starting %s (v%s)", settings.PROJECT_NAME, settings.VERSION)
     logger.info("Database backend: %s", engine.url.get_backend_name())
-
-    # Alembic remains available for development, but the deployed prototype
-    # must be able to boot even if a migration command is unavailable. create_all
-    # is idempotent and ensures registration has the required tables.
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database schema is ready")
     except Exception:
         logger.exception("Database initialization failed")
         raise
-
     yield
-
     logger.info("Shutting down %s", settings.PROJECT_NAME)
     engine.dispose()
 
@@ -55,25 +48,24 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://digital-biomarker-monitor.onrender.com",
+configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
 ]
 
-configured_origins = os.getenv("CORS_ORIGINS", "")
-if configured_origins:
-    origins.extend(
-        origin.strip().rstrip("/")
-        for origin in configured_origins.split(",")
-        if origin.strip()
-    )
-
+# Authentication uses Authorization bearer tokens, not browser cookies. Keep
+# CORS permissive for Render's generated HTTPS hostname so a renamed/recreated
+# static site cannot be rejected by an origin mismatch.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(dict.fromkeys(origins)),
-    allow_origin_regex=r"https://([a-zA-Z0-9-]+\.)?onrender\.com$",
-    allow_credentials=True,
+    allow_origins=configured_origins + [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://digital-biomarker-monitor.onrender.com",
+    ],
+    allow_origin_regex=r"https://.*\.onrender\.com$",
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
     expose_headers=["*"],
