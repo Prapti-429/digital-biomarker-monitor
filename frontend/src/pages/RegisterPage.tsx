@@ -21,9 +21,21 @@ export const RegisterPage: React.FC = () => {
       await register(email, password, fullName);
       navigate('/dashboard');
     } catch (err: any) {
-      setErrorMsg(
-        err.response?.data?.detail || 'Registration failed. Please check your information.'
-      );
+      if (err.response) {
+        const detail = err.response.data?.detail;
+        if (Array.isArray(detail)) {
+          // Pydantic validation error array (422)
+          setErrorMsg(detail.map((d: any) => `${d.loc?.slice(-1)[0]}: ${d.msg}`).join(', '));
+        } else if (typeof detail === 'string') {
+          setErrorMsg(detail);
+        } else {
+          setErrorMsg(`Server returned status ${err.response.status}: ${err.response.statusText}`);
+        }
+      } else if (err.request) {
+        setErrorMsg('Cannot connect to backend server. The service may be waking up or CORS is blocking the request.');
+      } else {
+        setErrorMsg(err.message || 'An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }
@@ -44,7 +56,7 @@ export const RegisterPage: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="bg-[#111827] py-8 px-6 sm:px-10 border border-slate-800 rounded-2xl shadow-2xl space-y-6">
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs break-words">
               {errorMsg}
             </div>
           )}
