@@ -1,16 +1,31 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { NuvyraLogo } from '../components/common/NuvyraLogo';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Preserve existing authentication hook/logic here if present
-    navigate('/dashboard');
+    setErrorMsg(null);
+    setLoading(true);
+
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setErrorMsg(
+        err.response?.data?.detail || 'Authentication failed. Please verify credentials or connection.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -18,16 +33,22 @@ export const LoginPage: React.FC = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <NuvyraLogo size="lg" className="justify-center" />
         <h2 className="mt-6 text-2xl font-bold tracking-tight text-white">
-          Understand your health over time.
+          Sign in to NUVYRA
         </h2>
         <p className="mt-2 text-xs text-slate-400">
-          Sign in to access your personal longitudinal health intelligence.
+          Access your personal longitudinal health intelligence.
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-[#111827] py-8 px-6 sm:px-10 border border-slate-800 rounded-2xl shadow-2xl">
-          <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="bg-[#111827] py-8 px-6 sm:px-10 border border-slate-800 rounded-2xl shadow-2xl space-y-6">
+          {errorMsg && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+              {errorMsg}
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
               <input
@@ -53,15 +74,19 @@ export const LoginPage: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-semibold py-2.5 rounded-xl text-sm transition-all shadow-md"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-semibold py-2.5 rounded-xl text-sm transition-all shadow-md disabled:opacity-50"
             >
-              Sign In
+              {loading ? 'Authenticating...' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <span className="text-xs text-slate-500">
-              Demo credentials: click Sign In to access the research prototype.
+          <div className="pt-4 border-t border-slate-800 text-center">
+            <span className="text-xs text-slate-400">
+              Don't have an account?{' '}
+              <Link to="/register" className="text-sky-400 hover:text-sky-300 font-semibold">
+                Register
+              </Link>
             </span>
           </div>
         </div>

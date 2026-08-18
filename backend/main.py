@@ -10,6 +10,22 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI(title="Nuvyra API")
+
+# Add your Render frontend URL and local dev URLs
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://digital-biomarker-monitor.onrender.com",  # Replace with your actual Render frontend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging

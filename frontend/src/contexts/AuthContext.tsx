@@ -1,81 +1,86 @@
-/**
- * React Auth Context Engine.
- *
- * Manages identity state, login/logout actions, and token persistence across the application.
- */
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiClient } from '../services/api';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, authService } from '../services/authService';
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  is_active: boolean;
+  subject_anonymous_id?: string;
+}
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: Record<string, unknown>) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('nuvyra_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const refreshUser = async (): Promise<void> => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const userData = await authService.getMe();
-        setUser(userData);
-      } else {
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-      localStorage.clear();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    refreshUser();
+    const initAuth = async () => {
+      const storedToken = localStorage.getItem('nuvyra_token');
+      if (storedToken) {
+        try {
+          const response = await apiClient.get('/auth/me');
+          setUser(response.data);
+          setToken(storedToken);
+        } catch {
+          localStorage.removeItem('nuvyra_token');
+          setToken(null);
+          setUser(null);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const login = async (credentials: Record<string, unknown>): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const tokens = await authService.login(credentials);
-      localStorage.setItem('access_token', tokens.access_token);
-      localStorage.setItem('refresh_token', tokens.refresh_token);
-      const userData = await authService.getMe();
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
+  const login = async (email: string, password: string) => {
+    const response = await apiClient.post('/auth/login', { email, password });
+    const { access_token, user: userData } = response.data;
+
+    localStorage.setItem('nuvyra_token', access_token);
+    setToken(access_token);
+    setUser(userData);
   };
 
-  const logout = async (): Promise<void> => {
-    try {
-      await authService.logout();
-    } catch {
-      // Ignore network teardown errors
-    } finally {
-      localStorage.clear();
-      setUser(null);
-    }
+  const register = async (email: string, password: string, fullName?: string) => {
+    const response = await apiClient.post('/auth/register', { email, password, full_name: fullName });
+    const { access_token, user: userData } = response.data;
+
+    localStorage.setItem('nuvyra_token', access_token);
+    setToken(access_token);
+    setUser(userData);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('nuvyra_token');
+    setToken(null);
+    setUser(null);
+    window.location.href = '/login';
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        token,
+        isAuthenticated: !!token,
         isLoading,
         login,
+        register,
         logout,
-        refreshUser,
       }}
     >
       {children}
@@ -83,7 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');

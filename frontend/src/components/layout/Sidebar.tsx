@@ -1,12 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { NuvyraLogo } from '../common/NuvyraLogo';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
+  const { user, logout } = useAuth();
+
   const navigation = [
     {
       name: 'Overview',
@@ -101,12 +104,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
         </div>
       </div>
 
-      <div className="p-4 border-t border-slate-800/60 bg-[#0B101D]">
+      <div className="p-4 border-t border-slate-800/60 bg-[#0B101D] space-y-2">
         <NavLink
           to="/settings"
           onClick={onCloseMobile}
           className={({ isActive }) =>
-            `flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            `flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
               isActive
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
@@ -120,16 +123,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
           <span>Privacy & Settings</span>
         </NavLink>
 
-        <div className="mt-3 px-3 py-2 flex items-center justify-between rounded-lg bg-slate-900/60 border border-slate-800">
+        <div className="px-3 py-2.5 flex items-center justify-between rounded-xl bg-slate-900/80 border border-slate-800">
           <div className="flex items-center space-x-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-teal-400 flex items-center justify-center text-xs font-bold text-slate-900">
-              U
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-500 to-teal-400 flex items-center justify-center text-xs font-bold text-slate-950">
+              {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
             </div>
             <div className="truncate">
-              <p className="text-xs font-medium text-slate-200 truncate">Participant 04</p>
-              <p className="text-[10px] text-slate-500 truncate">Baseline Active</p>
+              <p className="text-xs font-medium text-slate-200 truncate">
+                {user?.full_name || 'Participant'}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono truncate">
+                {user?.subject_anonymous_id || 'NV-88219'}
+              </p>
             </div>
           </div>
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
