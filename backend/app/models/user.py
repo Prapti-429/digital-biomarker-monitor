@@ -43,6 +43,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+        foreign_keys="PatientProfile.user_id",
     )
 
 
@@ -60,6 +61,7 @@ class PatientProfile(Base, TimestampMixin, SoftDeleteMixin):
         ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
+        index=True,
     )
     subject_anonymous_id: Mapped[str] = mapped_column(
         String(100),
@@ -76,4 +78,5 @@ class PatientProfile(Base, TimestampMixin, SoftDeleteMixin):
     user: Mapped[User] = relationship(
         "User",
         back_populates="patient_profile",
+        foreign_keys=[user_id],
     )
