@@ -19,13 +19,14 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
 
-    # Authentication/security. In production these should always be supplied
-    # as Render environment variables rather than committed to source control.
     JWT_SECRET_KEY: str = "dev-only-change-this-secret-before-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Render supplies DATABASE_URL for the managed PostgreSQL database.
+    # Keep the individual fields as a local-development fallback.
+    DATABASE_URL: Optional[str] = None
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
@@ -43,6 +44,16 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, value: Optional[str], info: ValidationInfo) -> Any:
         if isinstance(value, str) and value:
             return value
+
+        database_url = info.data.get("DATABASE_URL")
+        if database_url:
+            # Render may provide postgres://; SQLAlchemy/psycopg2 expects
+            # postgresql:// (or postgresql+psycopg2://).
+            normalized = database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+            if normalized.startswith("postgresql://"):
+                normalized = normalized.replace("postgresql://", "postgresql+psycopg2://", 1)
+            return normalized
+
         values = info.data
         return PostgresDsn.build(
             scheme="postgresql+psycopg2",
