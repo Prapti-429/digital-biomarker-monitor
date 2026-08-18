@@ -34,16 +34,18 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Backward-compatible alias for existing service files
 export const api = apiClient;
 
-// System API endpoint wrappers
 export const systemApi = {
   getRoot: async () => {
     const response = await apiClient.get('/');
     return response.data;
   },
   getHealth: async () => {
+    const response = await apiClient.get('/health');
+    return response.data;
+  },
+  getHealthStatus: async () => {
     const response = await apiClient.get('/health');
     return response.data;
   },
