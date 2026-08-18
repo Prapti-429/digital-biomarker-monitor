@@ -16,7 +16,7 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.audit_service import AuditService
 from app.services.authorization_service import AuthorizationService
-from app.schemas.auth_enums import TokenType
+from app.schemas.auth_enums import TokenType, UserRole
 from app.schemas.auth_schemas import LoginRequest, TokenResponse, UserRegisterRequest
 
 MAX_FAILED_ATTEMPTS = 5
@@ -36,11 +36,12 @@ class AuthenticationService:
         existing = self.user_repo.get_by_email(payload.email)
         if existing:
             raise DuplicateEntityError("User", f"Email '{payload.email}' is already registered.")
+        role_value = payload.role.value if isinstance(payload.role, UserRole) else str(payload.role)
         user = self.user_repo.create_user({
             "email": payload.email.lower().strip(),
             "hashed_password": hash_password(payload.password),
             "full_name": payload.full_name,
-            "role": payload.role,
+            "role": role_value,
             "is_active": True,
             "is_verified": False,
         })
@@ -70,11 +71,12 @@ class AuthenticationService:
         user.last_login_at = now
         self.db.commit()
 
+        role = UserRole(user.role)
         session_expiry = now + timedelta(days=self.jwt_engine.refresh_token_expire_days)
         session = self.session_repo.create_session(user_id=user.id, expires_at=session_expiry, ip_address=ip_address, user_agent=user_agent, device_fingerprint=payload.device_fingerprint)
-        permissions = self.authz_service.get_user_permissions(user.role)
-        access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=user.role, permissions=permissions, session_id=session.id)
-        refresh_token, ref_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=user.role, session_id=session.id)
+        permissions = self.authz_service.get_user_permissions(role)
+        access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
+        refresh_token, ref_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=ref_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(refresh_token.encode()).hexdigest(), expires_at=ref_payload.exp)
         self.audit_service.record_event(action="LOGIN_SUCCESS", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="Bearer", expires_in=self.jwt_engine.access_token_expire_minutes * 60)
@@ -98,9 +100,10 @@ class AuthenticationService:
         user = self.user_repo.get_by_id(user_id)
         if not user or not user.is_active:
             raise InvalidTokenError("User account is unavailable.")
-        permissions = self.authz_service.get_user_permissions(user.role)
-        new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=user.role, permissions=permissions, session_id=session.id)
-        new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=user.role, session_id=session.id)
+        role = UserRole(user.role)
+        permissions = self.authz_service.get_user_permissions(role)
+        new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
+        new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=new_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(new_refresh_token.encode()).hexdigest(), expires_at=new_payload.exp, parent_token_id=ref_record.id)
         return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token, token_type="Bearer", expires_in=self.jwt_engine.access_token_expire_minutes * 60)
 
