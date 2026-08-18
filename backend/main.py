@@ -20,13 +20,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifecycle.
-
-    Database schema management belongs to Alembic (the Render start command
-    runs ``alembic upgrade head`` before Uvicorn). The application must not call
-    ``Base.metadata.create_all`` at runtime because that bypasses migrations and
-    can attempt to create stale/incompatible foreign keys in production.
-    """
+    """Application lifecycle; schema management is handled by Alembic."""
     logger.info("Starting up %s (v%s)...", settings.PROJECT_NAME, settings.VERSION)
     yield
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
@@ -42,31 +36,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Register application middleware first. CORS is deliberately registered LAST
+# so Starlette places it outermost. This guarantees CORS headers are present
+# even when an inner middleware or endpoint returns an error.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ProcessTimingMiddleware)
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://digital-biomarker-monitor.onrender.com",
 ]
 
-if os.getenv("CORS_ORIGINS"):
-    origins.extend([o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()])
+configured_origins = os.getenv("CORS_ORIGINS", "")
+if configured_origins:
+    origins.extend(
+        origin.strip().rstrip("/")
+        for origin in configured_origins.split(",")
+        if origin.strip()
+    )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https://.*\.onrender\.com",
+    allow_origins=list(dict.fromkeys(origins)),
+    allow_origin_regex=r"https://([a-zA-Z0-9-]+\.)?onrender\.com$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["*"] ,
 )
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(ProcessTimingMiddleware)
-app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", include_in_schema=False)
-def root_redirect():
+def root():
     return {
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
@@ -77,6 +80,10 @@ def root_redirect():
 
 
 @app.get("/health", tags=["Health"])
+def health_root():
+    return {"status": "healthy", "service": settings.PROJECT_NAME, "version": settings.VERSION}
+
+
 @app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
-def health_check():
+def health_api():
     return {"status": "healthy", "service": settings.PROJECT_NAME, "version": settings.VERSION}
