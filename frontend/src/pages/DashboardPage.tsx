@@ -3,27 +3,33 @@ import { Link } from 'react-router-dom';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Sparkline } from '../components/common/Sparkline';
 import { TrendChart } from '../components/common/TrendChart';
-import { aiService, AIAnalysisResponse } from '../services/aiService';
+import { aiService, AIAnalysisResponse, AIHistoryResponse } from '../services/aiService';
 
 export const DashboardPage: React.FC = () => {
   const [latest, setLatest] = useState<AIAnalysisResponse | null>(null);
+  const [history, setHistory] = useState<AIHistoryResponse | null>(null);
 
   useEffect(() => {
-    aiService.latest().then(setLatest).catch(() => setLatest(null));
+    let active = true;
+    Promise.allSettled([aiService.latest(), aiService.history(30)]).then(([latestResult, historyResult]) => {
+      if (!active) return;
+      if (latestResult.status === 'fulfilled') setLatest(latestResult.value);
+      if (historyResult.status === 'fulfilled') setHistory(historyResult.value);
+    });
+    return () => { active = false; };
   }, []);
 
-  const score = latest?.overall_score ?? 84;
-  const trend = latest?.trend ?? 'STABLE';
+  const score = latest?.overall_score ?? 0;
+  const trend = latest?.trend ?? 'INITIAL';
   const status = score >= 80 ? 'stable' : score >= 60 ? 'improving' : 'degrading';
   const trendData = useMemo(() => {
-    const current = Math.round(score);
-    return [
-      { date: 'Baseline', value: Math.max(0, current - 4) },
-      { date: 'Observation 2', value: Math.max(0, current - 2) },
-      { date: 'Observation 3', value: Math.max(0, current - 1) },
-      { date: 'Observation 4', value: current },
-    ];
-  }, [score]);
+    const points = history?.items?.map((item, index) => ({
+      date: new Date(item.generated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      value: Math.round(item.score),
+      label: `Observation ${index + 1}`,
+    })) ?? [];
+    return points.length ? points : (latest ? [{ date: 'Latest', value: Math.round(latest.overall_score) }] : []);
+  }, [history, latest]);
 
   const featureCards = latest?.features?.length
     ? latest.features.slice(0, 4).map((feature) => ({
@@ -37,7 +43,7 @@ export const DashboardPage: React.FC = () => {
         { category: 'VOICE PATTERNS', value: '—', unit: '', status: 'stable', detail: 'Complete a check-in to populate acoustic features' },
         { category: 'FACIAL DYNAMICS', value: '—', unit: '', status: 'stable', detail: 'Complete a check-in to populate motion features' },
         { category: 'SURVEY SIGNALS', value: '—', unit: '', status: 'stable', detail: 'Complete a check-in to populate personal baseline' },
-        { category: 'AI STABILITY', value: String(Math.round(score)), unit: '/100', status, detail: 'Personalized longitudinal score' },
+        { category: 'AI STABILITY', value: latest ? String(Math.round(score)) : '—', unit: latest ? '/100' : '', status, detail: 'Personalized longitudinal score' },
       ];
 
   return (
@@ -52,10 +58,10 @@ export const DashboardPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 rounded-2xl bg-gradient-to-b from-[#162032] to-[#0F1726] border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div className="flex items-start justify-between"><div><span className="text-xs uppercase tracking-wider font-mono text-sky-400 font-semibold">NUVYRA HEALTH STABILITY INDEX</span><h2 className="text-lg font-medium text-slate-200 mt-1">Personalized longitudinal trajectory</h2></div><StatusBadge status={status} label={latest ? trend : 'Awaiting first AI observation'} /></div>
+          <div className="flex items-start justify-between"><div><span className="text-xs uppercase tracking-wider font-mono text-sky-400 font-semibold">NUVYRA HEALTH STABILITY INDEX</span><h2 className="text-lg font-medium text-slate-200 mt-1">Personalized longitudinal trajectory</h2></div><StatusBadge status={latest ? status : 'stable'} label={latest ? trend : 'Awaiting first AI observation'} /></div>
           <div className="my-6 grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-            <div><div className="flex items-baseline space-x-2"><span className="text-6xl font-extrabold text-white">{Math.round(score)}</span><span className="text-slate-400 text-sm">/ 100</span></div><p className="text-xs text-slate-400 mt-2">Observational score generated from available multimodal signals.</p></div>
-            <div className="border-t sm:border-t-0 sm:border-l border-slate-800 sm:pl-6 space-y-2 text-xs"><div className="flex justify-between text-slate-400"><span>Model confidence</span><span className="text-slate-200 font-mono">{latest ? `${Math.round(latest.confidence * 100)}%` : '—'}</span></div><div className="flex justify-between text-slate-400"><span>Baseline observations</span><span className="text-slate-200">{latest?.baseline_observations ?? 0}</span></div><div className="flex justify-between text-slate-400"><span>Model</span><span className="text-slate-200">{latest?.model_version ?? '1.0.0'}</span></div></div>
+            <div><div className="flex items-baseline space-x-2"><span className="text-6xl font-extrabold text-white">{latest ? Math.round(score) : '—'}</span>{latest && <span className="text-slate-400 text-sm">/ 100</span>}</div><p className="text-xs text-slate-400 mt-2">Observational score generated from available multimodal signals.</p></div>
+            <div className="border-t sm:border-t-0 sm:border-l border-slate-800 sm:pl-6 space-y-2 text-xs"><div className="flex justify-between text-slate-400"><span>Model confidence</span><span className="text-slate-200 font-mono">{latest ? `${Math.round(latest.confidence * 100)}%` : '—'}</span></div><div className="flex justify-between text-slate-400"><span>Baseline observations</span><span className="text-slate-200">{latest?.baseline_observations ?? history?.baseline_observations ?? 0}</span></div><div className="flex justify-between text-slate-400"><span>Model</span><span className="text-slate-200">{latest?.model_version ?? history?.model_version ?? '—'}</span></div></div>
           </div>
           <div className="pt-4 border-t border-slate-800/80"><TrendChart data={trendData} label="Observed stability trajectory" /></div>
         </div>
@@ -69,11 +75,11 @@ export const DashboardPage: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-4"><div><h3 className="text-lg font-bold text-white">Multimodal biomarker streams</h3><p className="text-xs text-slate-400">Features collected during your latest analysis</p></div><Link to="/biomarkers" className="text-xs text-sky-400">View detailed channels →</Link></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {featureCards.map((feature, index) => <div key={`${feature.category}-${index}`} className="rounded-xl bg-[#111827] border border-slate-800 p-5 flex flex-col justify-between"><div><div className="flex items-center justify-between"><span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">{feature.category}</span><StatusBadge status={feature.status} size="sm" /></div><div className="mt-3 flex items-baseline space-x-2"><span className="text-3xl font-bold text-white">{feature.value}</span><span className="text-xs text-slate-500">{feature.unit}</span></div><p className="text-xs text-slate-400 mt-2 leading-relaxed">{feature.detail}</p></div><div className="mt-4 pt-3 border-t border-slate-800/80"><Sparkline data={[70, 74, 72, 78, 80, Number(feature.value) || 80]} width={100} height={28} /></div></div>)}
+          {featureCards.map((feature, index) => <div key={`${feature.category}-${index}`} className="rounded-xl bg-[#111827] border border-slate-800 p-5 flex flex-col justify-between"><div><div className="flex items-center justify-between"><span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">{feature.category}</span><StatusBadge status={feature.status} size="sm" /></div><div className="mt-3 flex items-baseline space-x-2"><span className="text-3xl font-bold text-white">{feature.value}</span><span className="text-xs text-slate-500">{feature.unit}</span></div><p className="text-xs text-slate-400 mt-2 leading-relaxed">{feature.detail}</p></div><div className="mt-4 pt-3 border-t border-slate-800/80"><Sparkline data={latest ? [Math.max(0, Math.round(score) - 6), Math.max(0, Math.round(score) - 3), Math.round(score)] : [0]} width={100} height={28} /></div></div>)}
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-500 border-t border-slate-800 pt-4">Nuvyra's AI output is an observational digital-biomarker signal for longitudinal monitoring. It is not a diagnosis and should not replace professional medical assessment.</p>
+      <p className="text-[11px] text-slate-500 border-t border-slate-800 pt-4">NUVYRA AI produces observational digital-biomarker signals for longitudinal monitoring. It is not a diagnosis and should not replace professional medical assessment.</p>
     </div>
   );
 };
