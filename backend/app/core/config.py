@@ -1,7 +1,7 @@
 """Application configuration."""
 
+import os
 from typing import Optional
-from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
+        case_sensitive=False,
         extra="ignore",
     )
 
@@ -38,16 +38,16 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Return a SQLAlchemy-compatible PostgreSQL URL.
+        """Return the production DATABASE_URL when Render supplies it.
 
-        Render normally supplies DATABASE_URL as postgresql:// or postgres://.
-        psycopg2 works with the normalized postgresql:// form, so avoid the
-        Pydantic PostgresDsn conversion layer entirely in production.
+        Read the process environment directly as a final safeguard so a
+        Render-injected DATABASE_URL cannot be shadowed by a local .env file.
         """
-        if self.DATABASE_URL:
-            url = self.DATABASE_URL.strip()
+        database_url = os.environ.get("DATABASE_URL") or self.DATABASE_URL
+        if database_url:
+            url = database_url.strip()
             if url.startswith("postgres://"):
-                return "postgresql://" + url[len("postgres://"):]
+                url = "postgresql://" + url[len("postgres://"):]
             return url
 
         return (
