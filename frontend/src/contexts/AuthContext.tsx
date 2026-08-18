@@ -5,6 +5,7 @@ export interface User {
   id: string;
   email: string;
   full_name?: string;
+  role?: string;
   is_active: boolean;
   subject_anonymous_id?: string;
 }
@@ -31,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedToken = localStorage.getItem('nuvyra_token');
       if (storedToken) {
         try {
-          const response = await apiClient.get('/auth/me');
+          const response = await apiClient.get('/api/v1/auth/me');
           setUser(response.data);
           setToken(storedToken);
         } catch {
@@ -47,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
+    const response = await apiClient.post('/api/v1/auth/login', { email, password });
     const { access_token, user: userData } = response.data;
 
     localStorage.setItem('nuvyra_token', access_token);
@@ -56,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
-    const response = await apiClient.post('/auth/register', { email, password, full_name: fullName });
+    const response = await apiClient.post('/api/v1/auth/register', { email, password, full_name: fullName });
     const { access_token, user: userData } = response.data;
 
     localStorage.setItem('nuvyra_token', access_token);
