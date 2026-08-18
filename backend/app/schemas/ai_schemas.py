@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AIAnalysisRequest(BaseModel):
     """Feature vector collected during one daily monitoring session."""
-
     fatigue: float = Field(ge=0, le=10)
     mood_deviation: float = Field(ge=0, le=1)
     symptom_burden: float = Field(default=0, ge=0, le=1)
@@ -41,6 +40,11 @@ class AIAnalysisResponse(BaseModel):
     explanation: str
     features: List[BiomarkerFeatureRead]
     generated_at: datetime
+    data_quality_score: float = Field(ge=0, le=1, default=0)
+    modalities_present: List[str] = Field(default_factory=list)
+    top_drivers: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    limitations: List[str] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
 
 
