@@ -32,6 +32,11 @@ export interface AIAnalysisResponse {
   explanation: string;
   features: BiomarkerFeature[];
   generated_at: string;
+  data_quality_score: number;
+  modalities_present: string[];
+  top_drivers: string[];
+  recommendations: string[];
+  limitations: string[];
 }
 
 export interface AIHistoryPoint {
@@ -54,12 +59,10 @@ export const aiService = {
     const response = await apiClient.post<AIAnalysisResponse>('/ai/analyze', payload);
     return response.data;
   },
-
   async latest(): Promise<AIAnalysisResponse> {
     const response = await apiClient.get<AIAnalysisResponse>('/ai/latest');
     return response.data;
   },
-
   async history(limit = 30): Promise<AIHistoryResponse> {
     const response = await apiClient.get<AIHistoryResponse>('/ai/history', { params: { limit } });
     return response.data;
