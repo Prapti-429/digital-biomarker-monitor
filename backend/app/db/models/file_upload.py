@@ -10,13 +10,11 @@ from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-try:
-    from app.db.base import Base
-except ImportError:
-    from app.db.base import Base
+from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.patient import PatientProfile
+    from app.db.models.user import User
 
 
 class FileUploadRecord(Base):
@@ -26,8 +24,8 @@ class FileUploadRecord(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patient_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    
-    file_category: Mapped[str] = mapped_column(String(50), nullable=False, index=True) # E.g., voice, video, image, pdf_report
+
+    file_category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     file_path: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -38,14 +36,18 @@ class FileUploadRecord(Base):
     processing_status: Mapped[str] = mapped_column(String(50), default="COMPLETED", nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    uploaded_by_user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    # User.id is UUID, so all user foreign keys must also be UUID.
+    uploaded_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )
 
     patient: Mapped["PatientProfile"] = relationship("PatientProfile")
+    uploaded_by: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[uploaded_by_user_id]
+    )
 
     __table_args__ = (
         Index("idx_file_patient_category", "patient_id", "file_category"),
