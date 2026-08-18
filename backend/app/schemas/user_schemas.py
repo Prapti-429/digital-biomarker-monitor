@@ -1,19 +1,13 @@
-"""
-User Profile and Administration Data Transfer Objects (DTOs).
-
-Defines validation and response contracts for user profiles, admin updates,
-and RBAC role assignments.
-"""
+"""User profile DTOs."""
 
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
 from app.schemas.auth_enums import UserRole
 
 
 class UserBase(BaseModel):
-    """Base user attributes shared across schemas."""
     email: EmailStr
     full_name: Optional[str] = None
     role: UserRole = UserRole.PATIENT
@@ -22,21 +16,17 @@ class UserBase(BaseModel):
 
 
 class UserRead(UserBase):
-    """Public representation of a user account."""
-    id: int = Field(..., description="Primary user ID")
-    created_at: datetime = Field(..., description="Account creation UTC timestamp")
-    last_login_at: Optional[datetime] = Field(None, description="Last successful login UTC timestamp")
-
+    id: UUID = Field(..., description="Primary user UUID")
+    created_at: datetime
+    last_login_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserProfileUpdate(BaseModel):
-    """Payload for self-service profile edits by the authenticated user."""
-    full_name: Optional[str] = Field(None, max_length=255, description="Updated display name")
+    full_name: Optional[str] = Field(None, max_length=255)
 
 
 class UserAdminUpdate(BaseModel):
-    """Payload for administrative updates to a user account."""
     full_name: Optional[str] = Field(None, max_length=255)
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
@@ -44,7 +34,6 @@ class UserAdminUpdate(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    """Paginated user list payload for admin operations."""
     items: List[UserRead]
     total: int
     page: int
