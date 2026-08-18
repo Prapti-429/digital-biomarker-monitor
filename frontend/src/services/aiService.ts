@@ -34,6 +34,21 @@ export interface AIAnalysisResponse {
   generated_at: string;
 }
 
+export interface AIHistoryPoint {
+  check_in_id: string;
+  score: number;
+  trend: string;
+  confidence: number;
+  generated_at: string;
+}
+
+export interface AIHistoryResponse {
+  items: AIHistoryPoint[];
+  baseline_observations: number;
+  model_name: string;
+  model_version: string;
+}
+
 export const aiService = {
   async analyze(payload: AIAnalysisRequest): Promise<AIAnalysisResponse> {
     const response = await apiClient.post<AIAnalysisResponse>('/ai/analyze', payload);
@@ -42,6 +57,11 @@ export const aiService = {
 
   async latest(): Promise<AIAnalysisResponse> {
     const response = await apiClient.get<AIAnalysisResponse>('/ai/latest');
+    return response.data;
+  },
+
+  async history(limit = 30): Promise<AIHistoryResponse> {
+    const response = await apiClient.get<AIHistoryResponse>('/ai/history', { params: { limit } });
     return response.data;
   },
 };
