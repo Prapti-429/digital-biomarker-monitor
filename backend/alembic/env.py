@@ -1,6 +1,8 @@
 from logging.config import fileConfig
+import os
 import sys
 from pathlib import Path
+
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
@@ -10,7 +12,7 @@ if str(BASE_DIR) not in sys.path:
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db import models  # noqa: F401 - register every ORM model before migration
+from app.db import models  # noqa: F401
 
 config = context.config
 if config.config_file_name:
@@ -20,7 +22,13 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return str(settings.SQLALCHEMY_DATABASE_URI)
+    # Render injects DATABASE_URL into the process environment. Read it
+    # directly here so Alembic cannot accidentally use alembic.ini's local
+    # localhost URL during deployment.
+    url = os.environ.get("DATABASE_URL") or str(settings.SQLALCHEMY_DATABASE_URI)
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
 
 
 def run_migrations_offline() -> None:
