@@ -6,17 +6,15 @@ injecting authenticated user contexts, and enforcing RBAC/FGAC authorization gua
 """
 
 from typing import Annotated, List, Optional
+from uuid import UUID
+
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-# Import database session dependency
-try:
-    from app.db.session import get_db
-except ImportError:
-    from app.db.session import get_db
-
+from app.db.session import get_db
 from app.db.models import User
+from app.core.config import settings
 from app.core.jwt import JWTEngine, TokenPayload
 from app.core.exceptions import (
     AccountDisabledException,
@@ -35,10 +33,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=T
 def get_jwt_engine() -> JWTEngine:
     """Dependency provider for the application JWTEngine instance."""
     return JWTEngine(
-        secret_key="SUPER_SECRET_PRODUCTION_KEY_REPLACE_IN_ENV",
-        algorithm="HS256",
-        access_token_expire_minutes=15,
-        refresh_token_expire_days=7,
+        secret_key=settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+        access_token_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        refresh_token_expire_days=settings.REFRESH_TOKEN_EXPIRE_DAYS,
     )
 
 
@@ -46,10 +44,7 @@ def get_token_payload(
     token: Annotated[str, Depends(oauth2_scheme)],
     jwt_engine: Annotated[JWTEngine, Depends(get_jwt_engine)],
 ) -> TokenPayload:
-    """
-    Parses and verifies the OAuth2 Bearer Access Token.
-    Returns decoded TokenPayload claims.
-    """
+    """Parse and verify the OAuth2 Bearer access token."""
     return jwt_engine.decode_token(token, expected_type=TokenType.ACCESS)
 
 
@@ -57,19 +52,23 @@ def get_current_user(
     payload: Annotated[TokenPayload, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
-    """
-    Resolves the authenticated User record from the database.
-    Validates account state and session revocation.
-    """
+    """Resolve and validate the authenticated user from the JWT subject UUID."""
     if payload.sid:
         session_repo = SessionRepository(db)
         session = session_repo.get_active_session(payload.sid)
         if not session:
             raise TokenRevokedError("Associated session is no longer active.")
 
-    user_repo = UserRepository(db)
-    user = user_repo.get_by_id(int(payload.sub))
+    try:
+        user_id = UUID(str(payload.sub))
+    except (ValueError, TypeError) as exc:
+        raise TokenRevokedError("Token contains an invalid user identifier.") from exc
 
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(user_id)
+
+    if not user:
+        raise TokenRevokedError("Authenticated user no longer exists.")
     if not user.is_active:
         raise AccountDisabledException()
 
@@ -77,9 +76,7 @@ def get_current_user(
 
 
 class RequireRole:
-    """
-    Dependency callable guard that enforces Role-Based Access Control (RBAC).
-    """
+    """Dependency callable guard that enforces Role-Based Access Control."""
 
     def __init__(self, allowed_roles: List[UserRole] | UserRole) -> None:
         if isinstance(allowed_roles, UserRole):
@@ -96,9 +93,7 @@ class RequireRole:
 
 
 class RequirePermission:
-    """
-    Dependency callable guard that enforces Fine-Grained Access Control (FGAC).
-    """
+    """Dependency callable guard that enforces Fine-Grained Access Control."""
 
     def __init__(self, required_permission: Permission) -> None:
         self.required_permission = required_permission
