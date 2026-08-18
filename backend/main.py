@@ -5,33 +5,18 @@ Initializes the core FastAPI application instance, registers middleware, include
 endpoints, and manages infrastructure connection lifecycle hooks.
 """
 
-from contextlib import asynccontextmanager
+import os
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Nuvyra API")
-
-# Add your Render frontend URL and local dev URLs
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://digital-biomarker-monitor.onrender.com",  # Replace with your actual Render frontend URL
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.db.session import engine
 from app.middlewares.security import SecurityHeadersMiddleware
-from app.middlewares.timing import ProcessTimingMiddleware  
+from app.middlewares.timing import ProcessTimingMiddleware
 
 # Initialize application logging configuration
 setup_logging()
@@ -42,9 +27,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """
     Manages application startup and shutdown events.
-    
-    Verifies database connection availability on startup and disposes of engine connection pools
-    gracefully on shutdown.
     """
     logger.info("Starting up %s (v%s)...", settings.PROJECT_NAME, settings.VERSION)
     yield
@@ -60,14 +42,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Attach core middlewares
+# Explicit allowed origins list
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://digital-biomarker-monitor.onrender.com",
+]
+
+# Merge any dynamic origins from environment variables if present
+env_origins = os.getenv("CORS_ORIGINS")
+if env_origins:
+    origins.extend([o.strip() for o in env_origins.split(",") if o.strip()])
+
+# Attach CORS Middleware with explicit origins and wildcard regex for Render domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Attach Security & Timing middlewares
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 
@@ -84,4 +82,17 @@ def root_redirect():
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "docs": f"{settings.API_V1_STR}/docs",
+    }
+
+
+@app.get("/health", tags=["Health"])
+@app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
+def health_check():
+    """
+    Health check endpoint for Render monitoring and frontend health context.
+    """
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "version": settings.VERSION,
     }
