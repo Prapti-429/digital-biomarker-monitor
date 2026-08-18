@@ -1,11 +1,12 @@
 import axios, { AxiosInstance } from 'axios';
 
-// The frontend is deployed as a Render Static Site, while FastAPI runs as a
-// separate Render Web Service. Use the public backend URL unless Render
-// explicitly provides VITE_API_BASE_URL at build time.
-const baseURL =
+// Render frontend -> Render FastAPI backend.
+// Keep the production URL as the fallback so the app works even when
+// VITE_API_BASE_URL is not configured in Render.
+const baseURL = (
   import.meta.env.VITE_API_BASE_URL ||
-  'https://digital-biomarker-backend.onrender.com/api/v1';
+  'https://digital-biomarker-backend.onrender.com/api/v1'
+).replace(/\/$/, '');
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
@@ -13,7 +14,7 @@ export const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
-  timeout: 15000,
+  timeout: 30000,
 });
 
 apiClient.interceptors.request.use(
@@ -31,7 +32,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    if (error.response?.status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('nuvyra_token');
@@ -47,7 +48,7 @@ export const api = apiClient;
 
 export const systemApi = {
   getRoot: async () => {
-    const response = await axios.get(baseURL.replace(/\/api\/v1$/, '') + '/');
+    const response = await axios.get(`${baseURL.replace(/\/api\/v1$/, '')}/`);
     return response.data;
   },
   getHealth: async () => {
