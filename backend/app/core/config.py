@@ -1,8 +1,8 @@
-"""Application configuration using Pydantic Settings v2."""
+"""Application configuration."""
 
-from typing import Any, Optional
+from typing import Optional
+from urllib.parse import urlparse
 
-from pydantic import PostgresDsn, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Render supplies DATABASE_URL for the managed PostgreSQL database.
-    # Keep the individual fields as a local-development fallback.
     DATABASE_URL: Optional[str] = None
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
@@ -37,31 +35,24 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
     DB_ECHO: bool = False
-    SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
 
-    @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
-    @classmethod
-    def assemble_db_connection(cls, value: Optional[str], info: ValidationInfo) -> Any:
-        if isinstance(value, str) and value:
-            return value
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        """Return a SQLAlchemy-compatible PostgreSQL URL.
 
-        database_url = info.data.get("DATABASE_URL")
-        if database_url:
-            # Render may provide postgres://; SQLAlchemy/psycopg2 expects
-            # postgresql:// (or postgresql+psycopg2://).
-            normalized = database_url.replace("postgres://", "postgresql+psycopg2://", 1)
-            if normalized.startswith("postgresql://"):
-                normalized = normalized.replace("postgresql://", "postgresql+psycopg2://", 1)
-            return normalized
+        Render normally supplies DATABASE_URL as postgresql:// or postgres://.
+        psycopg2 works with the normalized postgresql:// form, so avoid the
+        Pydantic PostgresDsn conversion layer entirely in production.
+        """
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL.strip()
+            if url.startswith("postgres://"):
+                return "postgresql://" + url[len("postgres://"):]
+            return url
 
-        values = info.data
-        return PostgresDsn.build(
-            scheme="postgresql+psycopg2",
-            username=values.get("POSTGRES_USER"),
-            password=values.get("POSTGRES_PASSWORD"),
-            host=values.get("POSTGRES_SERVER"),
-            port=values.get("POSTGRES_PORT"),
-            path=f"{values.get('POSTGRES_DB') or ''}",
+        return (
+            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
 
