@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
+from app.db.base import Base
+from app.db import models  # noqa: F401 - register ORM models
 from app.db.session import engine
 from app.middlewares.security import SecurityHeadersMiddleware
 from app.middlewares.timing import ProcessTimingMiddleware
@@ -20,10 +22,23 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifecycle; schema management is handled by Alembic."""
-    logger.info("Starting up %s (v%s)...", settings.PROJECT_NAME, settings.VERSION)
+    """Initialize the database schema and keep the API available."""
+    logger.info("Starting %s (v%s)", settings.PROJECT_NAME, settings.VERSION)
+    logger.info("Database backend: %s", engine.url.get_backend_name())
+
+    # Alembic remains available for development, but the deployed prototype
+    # must be able to boot even if a migration command is unavailable. create_all
+    # is idempotent and ensures registration has the required tables.
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database schema is ready")
+    except Exception:
+        logger.exception("Database initialization failed")
+        raise
+
     yield
-    logger.info("Shutting down %s...", settings.PROJECT_NAME)
+
+    logger.info("Shutting down %s", settings.PROJECT_NAME)
     engine.dispose()
 
 
@@ -36,9 +51,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Register application middleware first. CORS is deliberately registered LAST
-# so Starlette places it outermost. This guarantees CORS headers are present
-# even when an inner middleware or endpoint returns an error.
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -64,7 +76,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
-    expose_headers=["*"] ,
+    expose_headers=["*"],
 )
 
 
