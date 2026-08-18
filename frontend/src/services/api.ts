@@ -1,73 +1,52 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
-export interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
-  _retry?: boolean;
-}
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-
-export const api = axios.create({
-  baseURL: API_BASE_URL,
+export const apiClient: AxiosInstance = axios.create({
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000,
 });
 
-// Request Interceptor: Attach JWT Access Token
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('access_token');
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('nuvyra_token');
     if (token && config.headers) {
-      config.headers.set('Authorization', `Bearer ${token}`);
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error: AxiosError) => Promise.reject(error)
+  (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Token Refresh & Auth Handling
-api.interceptors.response.use(
+apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
-
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-
-          const newAccessToken = res.data.access_token;
-          localStorage.setItem('access_token', newAccessToken);
-
-          if (originalRequest.headers) {
-            originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
-          }
-
-          return api(originalRequest);
-        }
-      } catch (refreshError) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('nuvyra_token');
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
         window.location.href = '/login';
-        return Promise.reject(refreshError);
       }
     }
-
     return Promise.reject(error);
   }
 );
 
-// System Health API endpoint expected by HealthContext
+// Backward-compatible alias for existing service files
+export const api = apiClient;
+
+// System API endpoint wrappers
 export const systemApi = {
-  async getHealthStatus(): Promise<{ status: string; timestamp: string }> {
-    const response = await api.get('/health');
+  getRoot: async () => {
+    const response = await apiClient.get('/');
+    return response.data;
+  },
+  getHealth: async () => {
+    const response = await apiClient.get('/health');
     return response.data;
   },
 };
 
-export default api;
+export default apiClient;
