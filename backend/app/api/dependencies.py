@@ -16,11 +16,7 @@ from app.db.session import get_db
 from app.db.models import User
 from app.core.config import settings
 from app.core.jwt import JWTEngine, TokenPayload
-from app.core.exceptions import (
-    AccountDisabledException,
-    InsufficientPermissionError,
-    TokenRevokedError,
-)
+from app.core.exceptions import AccountDisabledException, InsufficientPermissionError, TokenRevokedError
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.services.authorization_service import AuthorizationService
@@ -54,8 +50,7 @@ def get_current_user(
 ) -> User:
     """Resolve and validate the authenticated user from the JWT subject UUID."""
     if payload.sid:
-        session_repo = SessionRepository(db)
-        session = session_repo.get_active_session(payload.sid)
+        session = SessionRepository(db).get_active_session(payload.sid)
         if not session:
             raise TokenRevokedError("Associated session is no longer active.")
 
@@ -64,14 +59,11 @@ def get_current_user(
     except (ValueError, TypeError) as exc:
         raise TokenRevokedError("Token contains an invalid user identifier.") from exc
 
-    user_repo = UserRepository(db)
-    user = user_repo.get_by_id(user_id)
-
+    user = UserRepository(db).get_by_id(user_id)
     if not user:
         raise TokenRevokedError("Authenticated user no longer exists.")
     if not user.is_active:
         raise AccountDisabledException()
-
     return user
 
 
@@ -79,16 +71,12 @@ class RequireRole:
     """Dependency callable guard that enforces Role-Based Access Control."""
 
     def __init__(self, allowed_roles: List[UserRole] | UserRole) -> None:
-        if isinstance(allowed_roles, UserRole):
-            self.allowed_roles = [allowed_roles]
-        else:
-            self.allowed_roles = allowed_roles
+        self.allowed_roles = [allowed_roles] if isinstance(allowed_roles, UserRole) else allowed_roles
 
     def __call__(self, current_user: Annotated[User, Depends(get_current_user)]) -> User:
-        if current_user.role not in self.allowed_roles:
-            raise InsufficientPermissionError(
-                f"Required role in {[r.value for r in self.allowed_roles]}"
-            )
+        allowed_values = {role.value if isinstance(role, UserRole) else str(role) for role in self.allowed_roles}
+        if str(current_user.role) not in allowed_values:
+            raise InsufficientPermissionError(f"Required role in {sorted(allowed_values)}")
         return current_user
 
 
@@ -98,11 +86,7 @@ class RequirePermission:
     def __init__(self, required_permission: Permission) -> None:
         self.required_permission = required_permission
 
-    def __call__(
-        self,
-        current_user: Annotated[User, Depends(get_current_user)],
-        db: Annotated[Session, Depends(get_db)],
-    ) -> User:
+    def __call__(self, current_user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> User:
         authz_service = AuthorizationService(db)
         if not authz_service.has_permission(current_user.role, self.required_permission):
             raise InsufficientPermissionError(self.required_permission.value)
@@ -110,7 +94,7 @@ class RequirePermission:
 
 
 def get_client_ip(request: Request) -> Optional[str]:
-    """Helper dependency to extract client IP address handling reverse proxies."""
+    """Extract client IP address while handling reverse proxies."""
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -118,5 +102,5 @@ def get_client_ip(request: Request) -> Optional[str]:
 
 
 def get_user_agent(request: Request) -> Optional[str]:
-    """Helper dependency to extract request User-Agent header."""
+    """Extract request User-Agent header."""
     return request.headers.get("User-Agent")
