@@ -32,7 +32,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedToken = localStorage.getItem('nuvyra_token');
       if (storedToken) {
         try {
-          const response = await apiClient.get('/api/v1/auth/me');
+          // apiClient already includes /api/v1 in its base URL.
+          const response = await apiClient.get('/auth/me');
           setUser(response.data);
           setToken(storedToken);
         } catch {
@@ -48,8 +49,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await apiClient.post('/api/v1/auth/login', { email, password });
+    const response = await apiClient.post('/auth/login', { email, password });
     const { access_token, user: userData } = response.data;
+
+    if (!access_token) {
+      throw new Error('Login succeeded but the server did not return an access token.');
+    }
 
     localStorage.setItem('nuvyra_token', access_token);
     setToken(access_token);
@@ -57,16 +62,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
-    const response = await apiClient.post('/api/v1/auth/register', { email, password, full_name: fullName });
-    const { access_token, user: userData } = response.data;
+    // Registration endpoint returns the newly-created UserRead object, not a token.
+    // Authenticate immediately afterwards so a new user can enter the dashboard.
+    const response = await apiClient.post('/auth/register', {
+      email,
+      password,
+      full_name: fullName,
+    });
+
+    const registeredUser = response.data as User;
+
+    if (!registeredUser?.id) {
+      throw new Error('Account was created but the server returned an invalid user record.');
+    }
+
+    const loginResponse = await apiClient.post('/auth/login', { email, password });
+    const { access_token, user: userData } = loginResponse.data;
+
+    if (!access_token) {
+      throw new Error('Account was created but automatic sign-in failed because no access token was returned.');
+    }
 
     localStorage.setItem('nuvyra_token', access_token);
     setToken(access_token);
-    setUser(userData);
+    setUser(userData || registeredUser);
   };
 
   const logout = () => {
     localStorage.removeItem('nuvyra_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     setToken(null);
     setUser(null);
     window.location.href = '/login';
