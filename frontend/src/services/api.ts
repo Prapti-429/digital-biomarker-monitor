@@ -1,12 +1,25 @@
 import axios, { AxiosInstance } from 'axios';
 
-// Render frontend -> Render FastAPI backend.
-// Keep the production URL as the fallback so the app works even when
-// VITE_API_BASE_URL is not configured in Render.
-const baseURL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://digital-biomarker-backend.onrender.com/api/v1'
-).replace(/\/$/, '');
+/**
+ * Resolve the backend URL defensively.
+ * Render can provide VITE_API_BASE_URL from the dashboard as either the API
+ * root or the versioned API root. Normalize both forms so we never generate
+ * /api/v1/api/v1/... URLs.
+ */
+const configuredURL = String(import.meta.env.VITE_API_BASE_URL || '').trim();
+const fallbackURL = 'https://digital-biomarker-backend.onrender.com/api/v1';
+
+const normalizeBaseURL = (value: string): string => {
+  const url = (value || fallbackURL).replace(/\/+$/, '');
+
+  // Remove accidental duplicate version prefixes.
+  const withoutDuplicates = url.replace(/(\/api\/v1)+$/i, '');
+
+  // The frontend API client always works relative to /api/v1.
+  return `${withoutDuplicates}/api/v1`;
+};
+
+const baseURL = normalizeBaseURL(configuredURL);
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
@@ -14,7 +27,7 @@ export const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
-  timeout: 30000,
+  timeout: 45000,
 });
 
 apiClient.interceptors.request.use(
@@ -48,7 +61,7 @@ export const api = apiClient;
 
 export const systemApi = {
   getRoot: async () => {
-    const response = await axios.get(`${baseURL.replace(/\/api\/v1$/, '')}/`);
+    const response = await axios.get(baseURL.replace(/\/api\/v1$/i, '/'));
     return response.data;
   },
   getHealth: async () => {
