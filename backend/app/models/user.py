@@ -1,19 +1,19 @@
 from __future__ import annotations
+
 import uuid
 from typing import Optional
 
-from sqlalchemy import String, Boolean, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, SoftDeleteMixin
+from app.models.base import Base, SoftDeleteMixin, TimestampMixin
 
 
 class User(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
         index=True,
@@ -50,13 +50,13 @@ class PatientProfile(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "patient_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
         index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
