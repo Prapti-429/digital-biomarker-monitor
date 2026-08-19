@@ -101,7 +101,7 @@ export const CheckInPage: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1), [mood, setMood] = useState('same'), [fatigue, setFatigue] = useState(2), [symptoms, setSymptoms] = useState<string[]>([]);
   const [language, setLanguage] = useState<'English' | 'Hindi'>('English');
-  const [prompt, setPrompt] = useState(PROMPTS.English[0]);
+  const [prompt, setPrompt] = useState<string>(PROMPTS.English[0]);
   const [voiceRecording, setVoiceRecording] = useState(false), [voiceRecorded, setVoiceRecorded] = useState(false), [voiceSeconds, setVoiceSeconds] = useState(0);
   const [voiceFeatures, setVoiceFeatures] = useState<Awaited<ReturnType<typeof analyzeAudio>> | null>(null);
   const [metrics, setMetrics] = useState<MotionMetrics | null>(null), [capturing, setCapturing] = useState(false), [cameraError, setCameraError] = useState<string | null>(null);
