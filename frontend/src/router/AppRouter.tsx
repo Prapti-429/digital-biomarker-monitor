@@ -8,7 +8,7 @@ const DashboardPage=lazy(()=>import('../pages/DashboardPage').then(m=>({default:
 const BiomarkersPage=lazy(()=>import('../pages/BiomarkersPage').then(m=>({default:m.BiomarkersPage})));
 const TrendsPage=lazy(()=>import('../pages/TrendsPage').then(m=>({default:m.TrendsPage})));
 const TimelinePage=lazy(()=>import('../pages/TimelinePage').then(m=>({default:m.TimelinePage})));
-const CheckInPage=lazy(()=>import('../pages/CheckInMultimodalPage').then(m=>({default:m.CheckInMultimodalPage})));
+const CheckInPage=lazy(()=>import('../pages/CheckInResearchPage').then(m=>({default:m.CheckInResearchPage})));
 const ReportsPage=lazy(()=>import('../pages/ReportsPage').then(m=>({default:m.ReportsPage})));
 const PastHistoryPage=lazy(()=>import('../pages/PastHistoryPage').then(m=>({default:m.PastHistoryPage})));
 const NotificationsPage=lazy(()=>import('../pages/NotificationsPage').then(m=>({default:m.NotificationsPage})));
