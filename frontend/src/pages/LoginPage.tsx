@@ -18,7 +18,9 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login(email, password);
-      navigate('/dashboard');
+      // Always show the NUVYRA introduction after a successful login.
+      // The user can continue to the dashboard from the final onboarding card.
+      navigate('/welcome', { replace: true });
     } catch (err: any) {
       setErrorMsg(
         err.response?.data?.detail || 'Authentication failed. Please verify credentials or connection.'
