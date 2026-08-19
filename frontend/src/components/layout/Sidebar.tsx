@@ -8,7 +8,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
  const navigation = [
   { name:'Overview', href:'/dashboard' }, { name:'Daily Check-in', href:'/check-in', badge:'Active' },
   { name:'Biomarkers', href:'/biomarkers' }, { name:'Trends', href:'/trends' }, { name:'Timeline', href:'/timeline' },
-  { name:'Past History', href:'/past-history' }, { name:'Reports', href:'/reports' },
+  { name:'Past History', href:'/past-history' }, { name:'Notifications', href:'/notifications' }, { name:'Reports', href:'/reports' },
  ];
  return <aside className="w-64 flex-shrink-0 bg-[#0E1524] border-r border-slate-800/80 flex flex-col justify-between h-screen sticky top-0">
   <div className="p-6"><NuvyraLogo size="md" /><div className="mt-8 space-y-1"><p className="px-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Intelligence</p>
