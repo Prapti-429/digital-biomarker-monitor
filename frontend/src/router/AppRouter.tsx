@@ -14,25 +14,15 @@ const PastHistoryPage=lazy(()=>import('../pages/PastHistoryPage').then(m=>({defa
 const NotificationsPage=lazy(()=>import('../pages/NotificationsPage').then(m=>({default:m.NotificationsPage})));
 const SettingsPage=lazy(()=>import('../pages/SettingsPage').then(m=>({default:m.SettingsPage})));
 const ProfilePage=lazy(()=>import('../pages/ProfilePage').then(m=>({default:m.ProfilePage})));
+const CompanionPage=lazy(()=>import('../pages/CompanionPage').then(m=>({default:m.CompanionPage})));
 const WelcomePage=lazy(()=>import('../components/NuvyraWelcome').then(m=>({default:m.default})));
 const LoginPage=lazy(()=>import('../pages/LoginPage').then(m=>({default:m.LoginPage})));
 const RegisterPage=lazy(()=>import('../pages/RegisterPage').then(m=>({default:m.RegisterPage})));
 
 const FallbackLoader=()=> <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin"/></div>;
 const lazyElement=(Component:React.LazyExoticComponent<React.ComponentType>)=><Suspense fallback={<FallbackLoader/>}><Component/></Suspense>;
-
-const FirstVisitRedirect: React.FC = () => {
-  const completed = localStorage.getItem('nuvyra_onboarding_complete') === 'true';
-  return <Navigate to={completed ? '/dashboard' : '/welcome'} replace />;
-};
-
-const WelcomeRoute: React.FC = () => {
-  const navigate = useNavigate();
-  return <WelcomePage onComplete={() => {
-    localStorage.setItem('nuvyra_onboarding_complete', 'true');
-    navigate('/dashboard', { replace: true });
-  }} />;
-};
+const FirstVisitRedirect: React.FC = () => <Navigate to={localStorage.getItem('nuvyra_onboarding_complete') === 'true' ? '/dashboard' : '/welcome'} replace />;
+const WelcomeRoute: React.FC = () => { const navigate = useNavigate(); return <WelcomePage onComplete={() => { localStorage.setItem('nuvyra_onboarding_complete', 'true'); navigate('/dashboard', { replace: true }); }} />; };
 
 const router=createBrowserRouter([
   {path:'/login',element:lazyElement(LoginPage)},
@@ -49,12 +39,12 @@ const router=createBrowserRouter([
       {path:'reports',element:lazyElement(ReportsPage)},
       {path:'past-history',element:lazyElement(PastHistoryPage)},
       {path:'notifications',element:lazyElement(NotificationsPage)},
+      {path:'companion',element:lazyElement(CompanionPage)},
       {path:'profile',element:lazyElement(ProfilePage)},
       {path:'settings',element:lazyElement(SettingsPage)}
     ]}
   ]},
   {path:'*',element:<Navigate to="/dashboard" replace/>}
 ]);
-
 export const AppRouter:React.FC=()=> <LanguageProvider><RouterProvider router={router}/></LanguageProvider>;
 export default AppRouter;
