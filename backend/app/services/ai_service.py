@@ -1,7 +1,8 @@
 """Longitudinal multimodal digital-biomarker inference service.
 
 Observational monitoring only. It detects change from an individual's own
-baseline; it does not diagnose disease or make treatment decisions.
+baseline and uses user-provided history/document metadata as contextual
+information; it does not diagnose disease or make treatment decisions.
 """
 
 from __future__ import annotations
@@ -18,11 +19,11 @@ from sqlalchemy.orm import Session
 from app.db.models.biomarker_feature import BiomarkerFeature
 from app.db.models.daily_check_in import DailyCheckIn
 from app.db.models.health_stability_score import HealthStabilityScore
-from app.schemas.ai_schemas import AIAnalysisRequest, AIAnalysisResponse, AIHistoryPoint, AIHistoryResponse, BiomarkerFeatureRead
+from app.db.models.past_history import HealthReminder, MedicalDocument, PastHistoryRecord
+from app.schemas.ai_schemas import AIAnalysisRequest, AIAnalysisResponse, AIHistoryPoint, AIHistoryResponse, AIContextSummary, BiomarkerFeatureRead
 
 MODEL_NAME = "Nuvyra Multimodal Longitudinal Biomarker Engine"
-MODEL_VERSION = "2.0.0"
-
+MODEL_VERSION = "2.1.0"
 FEATURES = (
     ("fatigue", "survey"), ("mood_deviation", "survey"), ("symptom_burden", "survey"),
     ("voice_rms", "voice"), ("voice_zero_crossing_rate", "voice"), ("voice_pitch_hz", "voice"),
@@ -34,7 +35,6 @@ FEATURES = (
     ("breathing_variability", "breathing"), ("head_motion", "head_movement"),
     ("head_motion_variability", "head_movement"),
 )
-
 MODALITY_NAMES = ["survey", "voice", "facial_dynamics", "eye", "gait_movement", "breathing", "head_movement"]
 
 
@@ -65,6 +65,18 @@ class AIService:
             output.append((check_in, score, {f.feature_name: float(f.feature_value) for f in feature_rows}))
         return output
 
+    def _context(self, user_id: UUID) -> AIContextSummary:
+        history_count = self.db.scalar(select(PastHistoryRecord).where(PastHistoryRecord.user_id == user_id).count()) if False else None
+        history_rows = self.db.execute(select(PastHistoryRecord).where(PastHistoryRecord.user_id == user_id)).scalars().all()
+        documents = self.db.execute(select(MedicalDocument).where(MedicalDocument.user_id == user_id)).scalars().all()
+        pending = self.db.execute(select(HealthReminder).where(HealthReminder.user_id == user_id, HealthReminder.completed.is_(False))).scalars().all()
+        types = sorted({d.document_type for d in documents if d.document_type})
+        used = []
+        if history_rows: used.append("user-reported past history")
+        if documents: used.append("uploaded document metadata and extracted text availability")
+        if pending: used.append("pending health reminders")
+        return AIContextSummary(past_history_count=len(history_rows), document_count=len(documents), pending_reminder_count=len(pending), document_types=types, context_used=used)
+
     @staticmethod
     def _mad(values: List[float], center: float) -> float:
         return median([abs(v - center) for v in values]) if values else 0.0
@@ -82,7 +94,6 @@ class AIService:
     def _model_score(self, current: Dict[str, float], history_features: List[Dict[str, float]]):
         deviations = self._robust_deviations(current, history_features)
         n = len(history_features)
-        # Isolation Forest is used only when there is enough complete history.
         if n >= 5 and len(current) >= 4:
             try:
                 from sklearn.ensemble import IsolationForest
@@ -127,10 +138,7 @@ class AIService:
         notable = {k for k, v in deviations.items() if v >= 1.0}
         if not notable: return "NO_PERSISTENT_DEVIATION"
         recent = history[:3]
-        persisted = 0
-        for name in notable:
-            if all(name in row[2] for row in recent): persisted += 1
-        return "PERSISTENT_CHANGE" if persisted else "SINGLE_SESSION_CHANGE"
+        return "PERSISTENT_CHANGE" if all(name in row[2] for name in notable for row in recent) else "SINGLE_SESSION_CHANGE"
 
     @staticmethod
     def _drivers(deviations):
@@ -140,22 +148,26 @@ class AIService:
     def _missing(modalities):
         return [m for m in MODALITY_NAMES if m not in modalities]
 
-    def _recommendations(self, score, trend, quality, missing):
+    def _recommendations(self, score, trend, quality, missing, context: AIContextSummary):
         out = ["Compare repeated measurements under similar conditions; a single session should not be interpreted in isolation."]
         if quality < .6: out.append("Complete additional available signal groups on future check-ins to improve data quality.")
         if missing: out.append("Missing signals are ignored rather than imputed as normal; complete more modalities when practical.")
+        if context.pending_reminder_count: out.append("You have pending health-document reminders. Review them in Notifications and follow your clinician's instructions.")
         if trend == "DEGRADING" or score < 60: out.append("If a change persists or concerns you, discuss it with a qualified healthcare professional.")
         return out
 
-    def _limitations(self, history_count, missing):
+    @staticmethod
+    def _limitations(history_count, missing, context):
         out = ["Observational monitoring only; this system does not diagnose disease or make treatment decisions.", "Camera and microphone measurements can be affected by lighting, device position, background noise and recording quality."]
         if history_count < 5: out.append("The individual baseline is still developing; confidence should increase with repeated observations.")
         if missing: out.append("Missing modalities were not treated as normal; they were excluded from the fusion score.")
+        if context.document_count: out.append("Uploaded documents provide user-provided context; extracted text is not a substitute for clinician review.")
         return out
 
     def analyze(self, user_id: UUID, payload: AIAnalysisRequest) -> AIAnalysisResponse:
         current = self._vector(payload)
         history = self._history(user_id)
+        context = self._context(user_id)
         score, algorithm, confidence, deviations = self._model_score(current, [r[2] for r in history])
         previous = history[0][1].overall_score if history else None
         trend = self._trend(score, previous)
@@ -164,12 +176,12 @@ class AIService:
         quality = self._quality(current, payload)
         persistence = self._persistence(deviations, history)
         drivers = self._drivers(deviations)
-        recommendations = self._recommendations(score, trend, quality, missing)
-        limitations = self._limitations(len(history), missing)
+        recommendations = self._recommendations(score, trend, quality, missing, context)
+        limitations = self._limitations(len(history), missing, context)
         now = datetime.now(timezone.utc)
-        explanation = f"The current session is {('broadly consistent' if score >= 80 else 'moderately different' if score >= 60 else 'substantially different')} from the personal baseline. Trend: {trend}. Persistence: {persistence}. This is an observational signal, not a diagnosis."
+        explanation = f"The current session is {('broadly consistent' if score >= 80 else 'moderately different' if score >= 60 else 'substantially different')} from the personal baseline. Trend: {trend}. Persistence: {persistence}. The assessment used {len(modalities)} available signal groups and {context.past_history_count} reported history entries with {context.document_count} uploaded document(s) available as contextual information. This is an observational signal, not a diagnosis."
 
-        check_in = DailyCheckIn(user_id=user_id, check_in_date=date.today(), status="completed", completed_at=now, extra_metadata={"source": "web_multimodal_check_in", "model_version": MODEL_VERSION})
+        check_in = DailyCheckIn(user_id=user_id, check_in_date=date.today(), status="completed", completed_at=now, extra_metadata={"source": "web_multimodal_check_in", "model_version": MODEL_VERSION, "context": context.model_dump()})
         self.db.add(check_in); self.db.flush()
         feature_reads = []
         for name, category in FEATURES:
@@ -178,9 +190,9 @@ class AIService:
                 self.db.add(BiomarkerFeature(check_in_id=check_in.id, feature_name=name, feature_category=category, feature_value=value, source_modality=category, extracted_at=now, extra_properties={"model_version": MODEL_VERSION}))
                 feature_reads.append(BiomarkerFeatureRead(name=name, category=category, value=value, deviation=deviations.get(name)))
 
-        self.db.add(HealthStabilityScore(check_in_id=check_in.id, overall_score=round(score, 2), trend_category=trend, confidence=round(confidence, 3), generated_at=now, explanation_summary=explanation, model_metadata={"model_name": MODEL_NAME, "model_version": MODEL_VERSION, "algorithm": algorithm, "baseline_observations": len(history), "data_quality_score": quality, "modalities_present": modalities, "missing_modalities": missing, "top_drivers": drivers, "recommendations": recommendations, "limitations": limitations, "persistence_signal": persistence, "source_duration_seconds": payload.source_duration_seconds, "voice_language": payload.voice_language}))
+        self.db.add(HealthStabilityScore(check_in_id=check_in.id, overall_score=round(score, 2), trend_category=trend, confidence=round(confidence, 3), generated_at=now, explanation_summary=explanation, model_metadata={"model_name": MODEL_NAME, "model_version": MODEL_VERSION, "algorithm": algorithm, "baseline_observations": len(history), "data_quality_score": quality, "modalities_present": modalities, "missing_modalities": missing, "top_drivers": drivers, "recommendations": recommendations, "limitations": limitations, "persistence_signal": persistence, "source_duration_seconds": payload.source_duration_seconds, "voice_language": payload.voice_language, "context": context.model_dump()}))
         self.db.commit()
-        return AIAnalysisResponse(check_in_id=check_in.id, overall_score=round(score, 2), trend=trend, confidence=round(confidence, 3), model_name=MODEL_NAME, model_version=MODEL_VERSION, baseline_observations=len(history), explanation=explanation, features=feature_reads, generated_at=now, data_quality_score=quality, modalities_present=modalities, top_drivers=drivers, recommendations=recommendations, limitations=limitations, missing_modalities=missing, persistence_signal=persistence)
+        return AIAnalysisResponse(check_in_id=check_in.id, overall_score=round(score, 2), trend=trend, confidence=round(confidence, 3), model_name=MODEL_NAME, model_version=MODEL_VERSION, baseline_observations=len(history), explanation=explanation, features=feature_reads, generated_at=now, data_quality_score=quality, modalities_present=modalities, top_drivers=drivers, recommendations=recommendations, limitations=limitations, missing_modalities=missing, persistence_signal=persistence, context=context)
 
     def history(self, user_id: UUID, limit=30):
         rows = self._history(user_id, limit)
@@ -192,4 +204,4 @@ class AIService:
         c, s, _ = rows[0]
         features = self.db.execute(select(BiomarkerFeature).where(BiomarkerFeature.check_in_id == c.id)).scalars().all()
         m = s.model_metadata or {}
-        return AIAnalysisResponse(check_in_id=c.id, overall_score=round(s.overall_score, 2), trend=s.trend_category, confidence=round(s.confidence, 3), model_name=str(m.get("model_name", MODEL_NAME)), model_version=str(m.get("model_version", MODEL_VERSION)), baseline_observations=int(m.get("baseline_observations", 0)), explanation=s.explanation_summary or "No explanation available.", features=[BiomarkerFeatureRead(name=f.feature_name, category=f.feature_category, value=float(f.feature_value), deviation=None) for f in features], generated_at=s.generated_at, data_quality_score=float(m.get("data_quality_score", 0)), modalities_present=list(m.get("modalities_present", [])), top_drivers=list(m.get("top_drivers", [])), recommendations=list(m.get("recommendations", [])), limitations=list(m.get("limitations", [])), missing_modalities=list(m.get("missing_modalities", [])), persistence_signal=str(m.get("persistence_signal", "INSUFFICIENT_HISTORY")))
+        return AIAnalysisResponse(check_in_id=c.id, overall_score=round(s.overall_score, 2), trend=s.trend_category, confidence=round(s.confidence, 3), model_name=str(m.get("model_name", MODEL_NAME)), model_version=str(m.get("model_version", MODEL_VERSION)), baseline_observations=int(m.get("baseline_observations", 0)), explanation=s.explanation_summary or "No explanation available.", features=[BiomarkerFeatureRead(name=f.feature_name, category=f.feature_category, value=float(f.feature_value), deviation=None) for f in features], generated_at=s.generated_at, data_quality_score=float(m.get("data_quality_score", 0)), modalities_present=list(m.get("modalities_present", [])), top_drivers=list(m.get("top_drivers", [])), recommendations=list(m.get("recommendations", [])), limitations=list(m.get("limitations", [])), missing_modalities=list(m.get("missing_modalities", [])), persistence_signal=str(m.get("persistence_signal", "INSUFFICIENT_HISTORY")), context=AIContextSummary(**m.get("context", {})))
