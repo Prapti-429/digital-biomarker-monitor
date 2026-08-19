@@ -33,15 +33,20 @@ export const apiClient: AxiosInstance = axios.create({
   baseURL,
   timeout: 60000,
   headers: {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
   },
 });
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token') || localStorage.getItem('nuvyra_token');
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
+
+  // Never force JSON for FormData. The browser/Axios must generate the
+  // multipart boundary so FastAPI can correctly receive uploaded files.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type'];
+  } else if (config.headers && !config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
   }
   return config;
 });
@@ -52,15 +57,12 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
     if (!originalRequest) return Promise.reject(error);
 
-    // One refresh attempt for expired authenticated sessions.
     if (error.response?.status === 401 && !originalRequest._retry) {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         originalRequest._retry = true;
         try {
-          const refreshResponse = await axios.post(`${baseURL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          }, { timeout: 30000 });
+          const refreshResponse = await axios.post(`${baseURL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 30000 });
           const newAccessToken = refreshResponse.data?.access_token;
           const newRefreshToken = refreshResponse.data?.refresh_token;
           if (!newAccessToken) throw new Error('Refresh response did not contain an access token.');
