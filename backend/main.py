@@ -1,7 +1,6 @@
 """FastAPI application entrypoint."""
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -48,21 +47,14 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-configured_origins = [
-    origin.strip().rstrip("/")
-    for origin in os.getenv("CORS_ORIGINS", "").split(",")
-    if origin.strip()
-]
-
-# NUVYRA authenticates with Bearer tokens stored by the frontend; it does not
-# use browser cookies for authentication. Allowing cross-origin requests here
-# prevents a Render-generated frontend hostname (or a renamed deployment) from
-# turning a valid registration request into a browser-level "Network Error".
-# The API still requires its normal authentication and validation rules.
+# NUVYRA uses Bearer tokens rather than browser cookies. CORS therefore does
+# not need credentialed requests. Using an explicit wildcard here prevents a
+# renamed Render frontend, preview deployment, or custom HTTPS domain from
+# being turned into a misleading browser-level "Network Error" during public
+# registration. Authentication and all server-side validation remain enforced.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=(configured_origins or ["*"]),
-    allow_origin_regex=r"https://.*\.onrender\.com$",
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
