@@ -54,16 +54,14 @@ configured_origins = [
     if origin.strip()
 ]
 
-# Authentication uses Authorization bearer tokens, not browser cookies. Keep
-# CORS permissive for Render's generated HTTPS hostname so a renamed/recreated
-# static site cannot be rejected by an origin mismatch.
+# NUVYRA authenticates with Bearer tokens stored by the frontend; it does not
+# use browser cookies for authentication. Allowing cross-origin requests here
+# prevents a Render-generated frontend hostname (or a renamed deployment) from
+# turning a valid registration request into a browser-level "Network Error".
+# The API still requires its normal authentication and validation rules.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=configured_origins + [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://digital-biomarker-monitor.onrender.com",
-    ],
+    allow_origins=(configured_origins or ["*"]),
     allow_origin_regex=r"https://.*\.onrender\.com$",
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
