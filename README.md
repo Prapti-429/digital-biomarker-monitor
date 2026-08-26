@@ -1,4 +1,4 @@
-Digital Biomarker Monitor is a research prototype that attempts to explore how multimodal digital biomarkers obtained from consumer devices may be employed for monitoring longitudinal change in the physiology of individuals.
+Digital Biomarker Monitor is a prototype that attempts to explore how multimodal digital biomarkers obtained from consumer devices may be employed for monitoring longitudinal change in the physiology of individuals.
 
 The concept revolves around continuous and personalized health monitoring using a combination of various digital signals, including voice patterns, facial movements, head motions, respiratory patterns, and symptoms experienced by the user.
 Problem Statement
