@@ -56,24 +56,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.post('/auth/login', { email, password });
-    const { access_token } = response.data;
+    const { access_token, refresh_token } = response.data || {};
 
     if (!access_token) {
-      throw new Error('Login succeeded but the server did not return an access token.');
+      throw new Error('The server did not return a valid access token.');
     }
 
     localStorage.setItem('nuvyra_token', access_token);
     localStorage.setItem('access_token', access_token);
+    if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
     setToken(access_token);
 
-    // Login returns tokens only. Fetch the authenticated user separately.
     const currentUser = await loadCurrentUser();
     setUser(currentUser);
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
-    // Registration returns UserRead, not JWT tokens. Authenticate immediately
-    // afterwards so the newly-created user is taken directly into the app.
     const response = await apiClient.post('/auth/register', {
       email,
       password,
@@ -98,17 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: !!token,
-        isLoading,
-        login,
-        register,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -116,8 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
