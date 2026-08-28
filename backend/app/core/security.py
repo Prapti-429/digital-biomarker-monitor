@@ -11,11 +11,8 @@ from passlib.context import CryptContext
 from app.core.config import settings
 from app.core.exceptions import PasswordComplexityException
 
-# Use PBKDF2 for new passwords. The previous bcrypt-only configuration can
-# fail with modern bcrypt releases because Passlib 1.7.x expects a bcrypt
-# backend API that is no longer exposed consistently. Keep bcrypt as a
-# verification-only legacy scheme so previously-created accounts remain
-# readable.
+# PBKDF2 is the primary scheme for new passwords. bcrypt remains available for
+# accounts created before the password-hashing migration.
 pwd_context = CryptContext(
     schemes=["pbkdf2_sha256", "bcrypt"],
     deprecated=["bcrypt"],
@@ -42,16 +39,26 @@ def validate_password_complexity(password: str) -> str:
 
 
 def _password_material(password: str) -> str:
-    """Bound password input to a stable representation for all hash schemes."""
+    """Use a bounded representation for PBKDF2 while keeping legacy bcrypt compatible."""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def hash_password(password: str) -> str:
-    """Hash a password without relying on the broken bcrypt backend path."""
+    """Hash new passwords with PBKDF2."""
     return pwd_context.hash(_password_material(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify both current PBKDF2 hashes and legacy bcrypt hashes.
+
+    Older NUVYRA accounts were hashed directly with bcrypt. Those hashes must
+    be checked against the original password rather than the newer SHA-256
+    pre-hash. New PBKDF2 accounts use the bounded material above.
+    """
+    if not hashed_password:
+        return False
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        return pwd_context.verify(plain_password, hashed_password)
     return pwd_context.verify(_password_material(plain_password), hashed_password)
 
 
