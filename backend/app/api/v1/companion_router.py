@@ -16,12 +16,11 @@ def chat(
     payload: CompanionRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> CompanionResponse:
-    """Answer a companion question without requiring a database session.
+    """Return a companion answer without opening a database connection.
 
-    The companion only needs the authenticated identity; the deterministic
-    safety-first answer engine does not read or write database state. Keeping
-    the endpoint independent of the DB prevents an unrelated database hiccup
-    from surfacing to the user as a generic companion network error.
+    The answer engine is independent of database state. This prevents an
+    unrelated database connection problem from being surfaced as a generic
+    companion network error while preserving authentication on the endpoint.
     """
     message = (payload.message or "").strip()
     if not message:
@@ -29,9 +28,9 @@ def chat(
             answer="Please enter a question so I can help explain NUVYRA.",
             category="system",
             disclaimer=(
-                "NUVYRA is a research platform. Its digital-biomarker features "
-                "are experimental and are not clinically validated or a diagnosis."
-            ),
+                "NUVYRA is an observational research platform. Its digital-
+                biomarker features are experimental and are not a diagnosis."
+            ).replace("\n", " "),
         )
 
     text, category, disclaimer = answer(message, payload.language)
