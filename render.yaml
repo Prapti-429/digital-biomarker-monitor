@@ -4,14 +4,14 @@ services:
     env: python
     region: oregon
     buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "cd backend && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET_KEY
-        generateValue: true
+        sync: false
       - key: CORS_ORIGINS
         value: https://digital-biomarker-monitor.onrender.com
       - key: ENVIRONMENT
