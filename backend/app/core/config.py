@@ -14,10 +14,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "Digital Biomarker Monitor"
+    PROJECT_NAME: str = "NUVYRA"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+    ENVIRONMENT: str = "development"
 
     JWT_SECRET_KEY: str = "dev-only-change-this-secret-before-production"
     JWT_ALGORITHM: str = "HS256"
@@ -38,11 +39,11 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Return Render DATABASE_URL when available, otherwise a local SQLite DB.
+        """Return the configured PostgreSQL URL, or local SQLite during development.
 
-        SQLite is deliberately used only as a safe fallback for deployments where
-        the environment variable was not injected. This keeps the prototype
-        bootable instead of crashing on localhost:5432.
+        Production must use the externally managed Neon PostgreSQL database. A
+        silent SQLite fallback would make accounts disappear after a Render
+        restart and can make authentication appear intermittently broken.
         """
         database_url = os.environ.get("DATABASE_URL") or self.DATABASE_URL
         if database_url:
@@ -51,7 +52,13 @@ class Settings(BaseSettings):
                 url = "postgresql://" + url[len("postgres://"):]
             return url
 
+        if self.ENVIRONMENT.lower() == "production":
+            raise RuntimeError("DATABASE_URL is required in production. Configure the Neon PostgreSQL connection on Render.")
+
         return "sqlite:///./digital_biomarker.db"
 
 
 settings = Settings()
+
+if settings.ENVIRONMENT.lower() == "production" and settings.JWT_SECRET_KEY == "dev-only-change-this-secret-before-production":
+    raise RuntimeError("JWT_SECRET_KEY must be configured in production.")
