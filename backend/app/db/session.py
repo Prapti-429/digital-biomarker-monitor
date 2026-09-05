@@ -2,11 +2,9 @@
 
 import logging
 import os
-from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -36,31 +34,25 @@ def _get_database_uri() -> str:
     value = (os.environ.get("DATABASE_URL") or settings.DATABASE_URL or "").strip()
     if value.startswith("postgres://"):
         value = "postgresql://" + value[len("postgres://"):]
-    return value or "sqlite:///./digital_biomarker.db"
+    if value:
+        return value
+    return settings.SQLALCHEMY_DATABASE_URI
 
 
 DATABASE_URI = _get_database_uri()
 engine = _build_engine(DATABASE_URI)
 
-# Never let a bad/missing Render database connection prevent the HTTP server
-# from starting. This is a prototype-safe fallback; when DATABASE_URL works,
-# PostgreSQL remains the primary database.
+# In production, fail loudly if Neon is unavailable instead of silently using
+# an ephemeral local SQLite database. Silent fallback breaks authentication and
+# makes user accounts disappear across Render restarts/redeploys.
 try:
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
     logger.info("Database connection established: %s", engine.url.get_backend_name())
-except SQLAlchemyError:
-    if not DATABASE_URI.startswith("sqlite"):
-        logger.exception("Configured database is unavailable; using local SQLite fallback")
-        fallback_path = Path(__file__).resolve().parents[2] / "digital_biomarker.db"
-        DATABASE_URI = f"sqlite:///{fallback_path.as_posix()}"
-        engine.dispose()
-        engine = _build_engine(DATABASE_URI)
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        logger.warning("Using SQLite fallback database: %s", fallback_path)
-    else:
-        raise
+except Exception:
+    logger.exception("Database connection failed for %s", engine.url.get_backend_name())
+    engine.dispose()
+    raise
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -75,7 +67,7 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
-    except SQLAlchemyError as exc:
+    except Exception as exc:
         logger.error("Database session exception: %s", exc, exc_info=True)
         db.rollback()
         raise
