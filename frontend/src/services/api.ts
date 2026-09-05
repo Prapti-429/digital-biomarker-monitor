@@ -11,8 +11,10 @@ const normalizeBaseURL = (value: string): string => {
 
 export const baseURL = normalizeBaseURL(configuredURL);
 const API_ORIGIN = baseURL.replace(/\/api\/v1$/i, '');
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1200;
+// Render can briefly cold-start the backend. Keep retrying long enough for the
+// service to wake up instead of surfacing a misleading browser "Network Error".
+const MAX_RETRIES = 6;
+const INITIAL_RETRY_DELAY = 1500;
 
 export interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -81,7 +83,8 @@ apiClient.interceptors.response.use(
       }
     }
 
-    const isTransient = !error.response || error.response.status === 502 || error.response.status === 503 || error.response.status === 504 || (error.response.status >= 500 && error.response.status <= 599);
+    const status = error.response?.status;
+    const isTransient = !error.response || status === 502 || status === 503 || status === 504 || (status !== undefined && status >= 500 && status <= 599);
     originalRequest._retryCount = originalRequest._retryCount || 0;
     if (isTransient && originalRequest._retryCount < MAX_RETRIES) {
       originalRequest._retryCount += 1;
@@ -96,8 +99,8 @@ apiClient.interceptors.response.use(
     if (Array.isArray(detail)) message = detail.map((item: any) => item?.msg || String(item)).join(', ');
 
     return Promise.reject(Object.assign(new Error(message), {
-      status: error.response?.status,
-      code: responseData?.error_code || (error.response ? `HTTP_${error.response.status}` : 'NETWORK_ERROR'),
+      status,
+      code: responseData?.error_code || (error.response ? `HTTP_${status}` : 'NETWORK_ERROR'),
       details: responseData?.details || {},
       isNetworkError: !error.response,
     }));
