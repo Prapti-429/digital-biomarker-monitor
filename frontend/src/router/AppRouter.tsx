@@ -8,6 +8,7 @@ const DashboardPage=lazy(()=>import('../pages/DashboardPage').then(m=>({default:
 const BiomarkersPage=lazy(()=>import('../pages/BiomarkersPage').then(m=>({default:m.BiomarkersPage})));
 const TrendsPage=lazy(()=>import('../pages/TrendsPage').then(m=>({default:m.TrendsPage})));
 const TimelinePage=lazy(()=>import('../pages/TimelinePage').then(m=>({default:m.TimelinePage})));
+const ClinicalViewPage=lazy(()=>import('../pages/ClinicalViewPage').then(m=>({default:m.ClinicalViewPage})));
 const CheckInPage=lazy(()=>import('../pages/CheckInResearchPage').then(m=>({default:m.CheckInResearchPage})));
 const ReportsPage=lazy(()=>import('../pages/ReportsPage').then(m=>({default:m.ReportsPage})));
 const PastHistoryPage=lazy(()=>import('../pages/PastHistoryPage').then(m=>({default:m.PastHistoryPage})));
@@ -35,6 +36,7 @@ const router=createBrowserRouter([
       {path:'biomarkers',element:lazyElement(BiomarkersPage)},
       {path:'trends',element:lazyElement(TrendsPage)},
       {path:'timeline',element:lazyElement(TimelinePage)},
+      {path:'clinical-view',element:lazyElement(ClinicalViewPage)},
       {path:'check-in',element:lazyElement(CheckInPage)},
       {path:'reports',element:lazyElement(ReportsPage)},
       {path:'past-history',element:lazyElement(PastHistoryPage)},
