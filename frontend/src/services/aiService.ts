@@ -4,6 +4,12 @@ export interface AIAnalysisRequest {
   fatigue: number;
   mood_deviation: number;
   symptom_burden: number;
+  energy_level?: number;
+  sleep_quality?: number;
+  stress_level?: number;
+  concentration_level?: number;
+  physical_comfort?: number;
+  appetite_level?: number;
   voice_rms?: number;
   voice_zero_crossing_rate?: number;
   voice_pitch_hz?: number;
