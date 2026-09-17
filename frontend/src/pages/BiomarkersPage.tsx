@@ -1,149 +1,55 @@
-import React, { useState } from 'react';
-import { StatusBadge, StatusVariant } from '../components/common/StatusBadge';
-import { Sparkline } from '../components/common/Sparkline';
+import React, { useEffect, useMemo, useState } from 'react';
+import { aiService, AIAnalysisResponse } from '../services/aiService';
+import { InfoButton } from '../components/common/InfoButton';
 
-type ChannelType = 'all' | 'voice' | 'face' | 'motor' | 'symptoms';
+type Channel = 'all' | 'feeling' | 'voice' | 'face' | 'eyes' | 'movement' | 'breathing' | 'context';
+type Metric = { channel: Exclude<Channel,'all'>; name: string; key: string; unit: string; why: string; mayTell: string; assesses: string; affectedBy: string; limitation: string };
 
-interface BiomarkerMetric {
-  channel: 'voice' | 'face' | 'motor' | 'symptoms';
-  name: string;
-  current: string;
-  baseline: string;
-  status: StatusVariant;
-  trend: string;
-  description: string;
-  sparkline: number[];
-}
+const metrics: Metric[] = [
+ {channel:'feeling',name:'Overall feeling',key:'mood_deviation',unit:'context score',why:'Captures whether you feel different from your usual state.',mayTell:'Provides personal context for changes seen in other observations.',assesses:'Self-reported perceived change.',affectedBy:'Recent events, expectations, memory, mood and how the question is understood.',limitation:'It is subjective and cannot identify a cause or diagnosis.'},
+ {channel:'feeling',name:'Fatigue',key:'fatigue',unit:'/10',why:'Records how tired you feel during the check-in.',mayTell:'Shows whether perceived tiredness is changing over time.',assesses:'Self-reported fatigue.',affectedBy:'Sleep, activity, stress, illness, medication, routine and time of day.',limitation:'A self-report is not a clinical fatigue test.'},
+ {channel:'feeling',name:'Energy level',key:'energy_level',unit:'/10',why:'Adds context about how energetic you feel now.',mayTell:'Helps distinguish a change in tiredness from your broader sense of energy.',assesses:'Perceived energy.',affectedBy:'Sleep, activity, food, stress, time of day and many personal factors.',limitation:'It is subjective and should be interpreted with the rest of the record.'},
+ {channel:'feeling',name:'Sleep quality',key:'sleep_quality',unit:'/10',why:'Sleep can influence many day-to-day observations.',mayTell:'Provides context when other signals change after a different night of sleep.',assesses:'Perceived restorative quality of recent sleep.',affectedBy:'Sleep duration, interruptions, routine, environment and personal perception.',limitation:'It is not a sleep study and does not measure sleep stages.'},
+ {channel:'feeling',name:'Stress',key:'stress_level',unit:'/10',why:'Records current perceived stress as contextual information.',mayTell:'May help explain temporary changes in speech, movement or self-report.',assesses:'Perceived stress at check-in.',affectedBy:'Events, environment, emotions, expectations and time of day.',limitation:'It does not diagnose an anxiety or other mental-health condition.'},
+ {channel:'feeling',name:'Concentration',key:'concentration_level',unit:'/10',why:'Captures how easy it feels to focus during the check-in.',mayTell:'Adds context to day-to-day cognitive self-report changes.',assesses:'Perceived ability to concentrate.',affectedBy:'Sleep, distractions, stress, fatigue, environment and task difficulty.',limitation:'It is not a cognitive or neurological examination.'},
+ {channel:'feeling',name:'Physical comfort',key:'physical_comfort',unit:'/10',why:'Records how physically comfortable you feel.',mayTell:'Adds context for changes in movement or reported symptoms.',assesses:'Overall perceived physical comfort.',affectedBy:'Pain, posture, activity, environment, temporary discomfort and other factors.',limitation:'It is a broad self-report rather than a measurement of a specific condition.'},
+ {channel:'feeling',name:'Appetite',key:'appetite_level',unit:'/10',why:'Adds a simple contextual signal about appetite compared with your usual pattern.',mayTell:'Can identify a change worth viewing alongside other longitudinal observations.',assesses:'Perceived appetite change.',affectedBy:'Meal timing, routine, stress, activity, medications and temporary illness.',limitation:'It does not assess nutrition, weight, or diagnose a condition.'},
+ {channel:'voice',name:'Voice RMS / sound strength',key:'voice_rms',unit:'relative amplitude',why:'Measures the strength of the recorded audio waveform.',mayTell:'Shows whether recorded vocal intensity differs from previous samples.',assesses:'Acoustic amplitude.',affectedBy:'Microphone, distance, room acoustics, background noise, speaking style and device gain.',limitation:'It is strongly recording-condition dependent and is not a measure of health on its own.'},
+ {channel:'voice',name:'Zero-crossing rate',key:'voice_zero_crossing_rate',unit:'crossings/frame',why:'Describes how frequently the waveform changes sign.',mayTell:'Adds information about the acoustic character of speech.',assesses:'A basic waveform-frequency characteristic.',affectedBy:'Voice sounds, consonants, microphone, compression and noise.',limitation:'It is an acoustic feature, not a direct physiological measurement.'},
+ {channel:'voice',name:'Pitch',key:'voice_pitch_hz',unit:'Hz',why:'Estimates the fundamental frequency of voiced speech.',mayTell:'Tracks changes in vocal pitch across repeated samples.',assesses:'Vocal frequency characteristics.',affectedBy:'Speaker characteristics, language, intonation, emotion, vocal effort, microphone and recording quality.',limitation:'Pitch naturally varies and one value does not indicate a disease.'},
+ {channel:'voice',name:'Speech activity',key:'voice_speech_activity',unit:'%',why:'Estimates how much of the recording contains active speech.',mayTell:'Helps describe speaking continuity and usable speech duration.',assesses:'Speech-versus-non-speech activity in the recording.',affectedBy:'Prompt, pauses, background sounds, microphone and speaking style.',limitation:'It is not the same as speech fluency or language ability.'},
+ {channel:'voice',name:'Speech rate',key:'voice_speech_rate',unit:'words/sec when available',why:'Tracks the timing of spoken output.',mayTell:'Shows whether speaking pace changes relative to personal history.',assesses:'Speech timing.',affectedBy:'Language, prompt, familiarity, emotion, fatigue, intentional pace, microphone and transcription quality.',limitation:'A change can have many non-medical explanations.'},
+ {channel:'voice',name:'Pause ratio',key:'voice_pause_ratio',unit:'ratio when available',why:'Tracks the proportion of a sample spent in pauses.',mayTell:'Adds temporal information about speech continuity.',assesses:'Pause distribution and speech timing.',affectedBy:'Prompt, thinking time, language, emotion, environment and recording quality.',limitation:'Pauses are normal and context-dependent.'},
+ {channel:'face',name:'Facial motion',key:'face_motion',unit:'relative motion',why:'Measures visible frame-to-frame facial change.',mayTell:'Tracks whether facial movement patterns differ from the personal baseline.',assesses:'Facial movement dynamics.',affectedBy:'Lighting, camera position, image quality, expression, glasses/masks and deliberate movement.',limitation:'It does not identify the reason for a movement change.'},
+ {channel:'face',name:'Facial luminance variability',key:'face_luminance_variability',unit:'relative variability',why:'Describes changes in image brightness during the sample.',mayTell:'Helps characterize recording quality and environmental consistency.',assesses:'Visual illumination stability.',affectedBy:'Room lighting, shadows, screen light, camera exposure and movement.',limitation:'This is primarily a data-quality/context feature, not a health measurement.'},
+ {channel:'eyes',name:'Blink proxy / blink rate',key:'blink_rate_per_minute',unit:'blinks/min when estimated',why:'Tracks visible blink behavior over repeated recordings.',mayTell:'Shows whether observed blink patterns differ from personal history.',assesses:'Camera-visible eye/blink dynamics.',affectedBy:'Lighting, camera angle, screen use, dry eyes, attention, fatigue and image quality.',limitation:'It is an estimate, not an ophthalmic examination.'},
+ {channel:'eyes',name:'Eye opening proxy',key:'eye_opening_proxy',unit:'relative 0–1',why:'Describes camera-visible eye opening during the sample.',mayTell:'Adds detail to longitudinal eye dynamics.',assesses:'Visible eye-opening pattern.',affectedBy:'Camera position, glasses, lighting, facial position, expression and image quality.',limitation:'It should not be interpreted as a medical eye measurement.'},
+ {channel:'movement',name:'Gait motion',key:'gait_motion',unit:'relative motion',why:'Tracks visible movement during the movement sample.',mayTell:'Shows whether movement magnitude differs from personal history.',assesses:'Observable movement dynamics.',affectedBy:'Camera placement, walking surface, footwear, speed, environment and recording quality.',limitation:'It is not a standardized clinical gait examination.'},
+ {channel:'movement',name:'Gait variability',key:'gait_variability',unit:'relative variability',why:'Describes how much movement changes within a sample.',mayTell:'Adds information about movement consistency.',assesses:'Within-sample movement variability.',affectedBy:'Surface, speed, camera position, intentional movement and recording quality.',limitation:'Variability has many possible causes and needs context.'},
+ {channel:'movement',name:'Gait symmetry proxy',key:'gait_symmetry_proxy',unit:'relative 0–1',why:'Estimates similarity between visible sides of movement.',mayTell:'Tracks changes in movement symmetry relative to personal history.',assesses:'A camera-derived symmetry proxy.',affectedBy:'Camera angle, occlusion, clothing, surface, speed and movement instruction.',limitation:'It is a research proxy, not a clinical symmetry test.'},
+ {channel:'movement',name:'Head motion',key:'head_motion',unit:'relative motion',why:'Tracks visible head-position changes.',mayTell:'Adds temporal movement context to facial observations.',assesses:'Head-motion dynamics.',affectedBy:'Camera placement, posture, intentional movement and image quality.',limitation:'It does not establish why head movement changed.'},
+ {channel:'movement',name:'Head-motion variability',key:'head_motion_variability',unit:'relative variability',why:'Measures variation in visible head movement.',mayTell:'Tracks changes in movement consistency.',assesses:'Temporal head-motion variability.',affectedBy:'Posture, camera position, expression, environment and recording quality.',limitation:'This is an experimental observational feature.'},
+ {channel:'breathing',name:'Breathing rate estimate',key:'breathing_rate_per_minute',unit:'breaths/min when estimated',why:'Adds a camera-derived breathing-related signal when the recording permits estimation.',mayTell:'Tracks changes in observed respiratory rhythm over time.',assesses:'Visible breathing rhythm proxy.',affectedBy:'Posture, movement, speaking, camera quality, clothing, lighting and environment.',limitation:'It is not equivalent to a medical respiratory measurement.'},
+ {channel:'breathing',name:'Breathing variability',key:'breathing_variability',unit:'relative variability',why:'Tracks variation in the estimated breathing rhythm.',mayTell:'Adds temporal context to the breathing-related signal.',assesses:'Variability of the observed respiratory rhythm proxy.',affectedBy:'Activity, speaking, posture, recording quality and environment.',limitation:'It is experimental and should not be used alone for clinical decisions.'},
+];
+
+const labels: Record<string,string> = { fatigue:'Fatigue', mood_deviation:'Overall feeling', energy_level:'Energy', sleep_quality:'Sleep quality', stress_level:'Stress', concentration_level:'Concentration', physical_comfort:'Physical comfort', appetite_level:'Appetite', voice_rms:'Voice RMS', voice_zero_crossing_rate:'Zero-crossing rate', voice_pitch_hz:'Pitch', voice_speech_activity:'Speech activity', voice_speech_rate:'Speech rate', voice_pause_ratio:'Pause ratio', face_motion:'Facial motion', face_luminance_variability:'Facial luminance variability', face_blink_proxy:'Blink proxy', blink_rate_per_minute:'Blink rate', eye_opening_proxy:'Eye opening', gait_motion:'Gait motion', gait_variability:'Gait variability', gait_symmetry_proxy:'Gait symmetry', breathing_rate_per_minute:'Breathing rate', breathing_variability:'Breathing variability', head_motion:'Head motion', head_motion_variability:'Head-motion variability' };
 
 export const BiomarkersPage: React.FC = () => {
-  const [selectedChannel, setSelectedChannel] = useState<ChannelType>('all');
+  const [selectedChannel,setSelectedChannel] = useState<Channel>('all');
+  const [expanded,setExpanded] = useState<string | null>(null);
+  const [latest,setLatest] = useState<AIAnalysisResponse | null>(null);
+  useEffect(() => { aiService.latest().then(setLatest).catch(() => setLatest(null)); }, []);
+  const byKey = useMemo(() => Object.fromEntries((latest?.features || []).map(f => [f.name,f])), [latest]);
+  const visible = selectedChannel === 'all' ? metrics : metrics.filter(m => m.channel === selectedChannel);
+  const tabs: {id:Channel;label:string}[] = [{id:'all',label:'Everything'},{id:'feeling',label:'How you feel'},{id:'voice',label:'Voice & speech'},{id:'face',label:'Facial dynamics'},{id:'eyes',label:'Eyes & blink'},{id:'movement',label:'Movement & gait'},{id:'breathing',label:'Breathing'},{id:'context',label:'How NUVYRA interprets'}];
+  const latestValue = (m: Metric) => { const f = byKey[m.key]; if (!f) return 'Not measured in the latest available session'; if (m.key === 'mood_deviation') return f.value <= .1 ? 'About the same / better' : f.value < .75 ? 'Different' : 'Noticeably different'; if (m.unit === '/10') return `${f.value.toFixed(1)} / 10`; if (m.unit === 'Hz') return `${f.value.toFixed(1)} Hz`; if (m.unit.includes('blinks')) return `${f.value.toFixed(1)} blinks/min`; if (m.unit === '%') return `${(f.value*100).toFixed(0)}%`; return f.value.toFixed(4); };
 
-  const biomarkerMetrics: BiomarkerMetric[] = [
-    {
-      channel: 'voice',
-      name: 'Speech Articulation Rate',
-      current: '3.8 syll/sec',
-      baseline: '3.6 – 4.1 syll/sec',
-      status: 'stable',
-      trend: 'Within baseline',
-      description: 'Derived from daily phonation samples. Measures syllable frequency and pause distribution.',
-      sparkline: [3.7, 3.8, 3.7, 3.9, 3.8]
-    },
-    {
-      channel: 'voice',
-      name: 'Vocal Jitter & Shimmer',
-      current: '1.2%',
-      baseline: '1.0% – 1.5%',
-      status: 'stable',
-      trend: 'Within baseline',
-      description: 'Micro-fluctuations in fundamental frequency and amplitude during sustained vowel phonation.',
-      sparkline: [1.3, 1.2, 1.4, 1.2, 1.2]
-    },
-    {
-      channel: 'face',
-      name: 'Spontaneous Blink Interval',
-      current: '16 blinks/min',
-      baseline: '14 – 20 blinks/min',
-      status: 'stable',
-      trend: 'Optimal',
-      description: 'Visual extraction of eye-aspect ratios from 30-second camera recordings.',
-      sparkline: [17, 16, 18, 15, 16]
-    },
-    {
-      channel: 'motor',
-      name: 'Pronation-Supination Rhythm',
-      current: '2.4 Hz',
-      baseline: '2.3 – 2.8 Hz',
-      status: 'improving',
-      trend: '+0.2 Hz vs last week',
-      description: 'Rapid alternating forearm rotation cadence measured via consumer camera stream.',
-      sparkline: [2.1, 2.2, 2.3, 2.4, 2.4]
-    },
-    {
-      channel: 'symptoms',
-      name: 'Reported Daily Fatigue',
-      current: '1 / 10',
-      baseline: '1 – 3 / 10',
-      status: 'stable',
-      trend: 'Low severity',
-      description: 'Self-reported visual analogue scoring recorded during morning check-in.',
-      sparkline: [2, 1, 2, 1, 1]
-    },
-  ];
-
-  const filterTabs: { id: ChannelType; label: string }[] = [
-    { id: 'all', label: 'All Channels' },
-    { id: 'voice', label: 'Voice & Speech' },
-    { id: 'face', label: 'Facial Dynamics' },
-    { id: 'motor', label: 'Movement & Motor' },
-    { id: 'symptoms', label: 'Symptom Trajectory' },
-  ];
-
-  const filtered = selectedChannel === 'all'
-    ? biomarkerMetrics
-    : biomarkerMetrics.filter((m) => m.channel === selectedChannel);
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-          Digital Biomarker Channels
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Objective computational features derived from continuous, non-clinical sensor observations.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-4">
-        {filterTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setSelectedChannel(tab.id)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              selectedChannel === tab.id
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        {filtered.map((metric, i) => (
-          <div
-            key={i}
-            className="rounded-2xl bg-[#111827] border border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-slate-700 transition-all"
-          >
-            <div className="max-w-xl">
-              <div className="flex items-center gap-3">
-                <h3 className="text-base font-semibold text-white">{metric.name}</h3>
-                <StatusBadge status={metric.status} size="sm" />
-              </div>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                {metric.description}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 items-center gap-6 border-t md:border-t-0 pt-4 md:pt-0 border-slate-800">
-              <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500">Current</span>
-                <p className="text-base font-bold text-white">{metric.current}</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500">Personal Baseline</span>
-                <p className="text-xs font-medium text-slate-300 font-mono">{metric.baseline}</p>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <span className="text-[10px] uppercase font-mono text-slate-500">Recent Signal</span>
-                <Sparkline data={metric.sparkline} width={100} height={24} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <div className="space-y-7 max-w-6xl mx-auto">
+    <header><h1 className="text-2xl sm:text-3xl font-bold text-white">What NUVYRA measures</h1><p className="text-slate-400 text-sm mt-2 max-w-4xl leading-6">NUVYRA collects observable signals from everyday devices and self-reported context. Each measurement is explained below: what it is, why it is collected, what it may tell us, what it assesses, and what can affect it. NUVYRA compares usable observations with your personal history rather than treating one universal value as “normal.”</p></header>
+    <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-5 text-sm text-slate-300 leading-6"><strong className="text-white">Important:</strong> These are experimental digital-biomarker and contextual measurements. A change in one parameter does not diagnose a disease or establish its cause. Missing or poor-quality measurements are excluded rather than silently treated as normal.</div>
+    <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-4">{tabs.map(t => <button key={t.id} type="button" onClick={() => setSelectedChannel(t.id)} className={`px-3 py-2 rounded-lg text-xs border ${selectedChannel===t.id?'border-sky-500/40 bg-sky-500/10 text-sky-300':'border-transparent text-slate-400 hover:bg-slate-800'}`}>{t.label}</button>)}</div>
+    {selectedChannel === 'context' ? <section className="grid md:grid-cols-2 gap-4"><div className="rounded-2xl bg-[#111827] border border-slate-800 p-5"><h2 className="font-semibold text-white">Personal baseline</h2><p className="mt-2 text-sm text-slate-400 leading-6">Previous usable observations establish your personal reference pattern. NUVYRA can then describe how today's observations differ from that history. A new account has less baseline information, so interpretation is more limited.</p></div><div className="rounded-2xl bg-[#111827] border border-slate-800 p-5"><h2 className="font-semibold text-white">Data quality</h2><p className="mt-2 text-sm text-slate-400 leading-6">The system considers whether enough usable signal was captured. Lighting, camera position, microphone quality, background noise, short recordings and missing modalities can reduce quality.</p></div><div className="rounded-2xl bg-[#111827] border border-slate-800 p-5"><h2 className="font-semibold text-white">Multimodal interpretation</h2><p className="mt-2 text-sm text-slate-400 leading-6">Available signal groups can include self-report, voice, facial dynamics, eyes, movement, head motion and breathing-related observations. NUVYRA looks for patterns across signals and over time instead of relying on a single parameter.</p></div><div className="rounded-2xl bg-[#111827] border border-slate-800 p-5"><h2 className="font-semibold text-white">Persistence</h2><p className="mt-2 text-sm text-slate-400 leading-6">A one-session difference is distinguished from a change that appears repeatedly in recent usable observations. Repeated change is still observational and needs human/clinical context.</p></div></section> : <div className="space-y-4">{visible.map(m => { const open=expanded===m.key; return <article key={m.key} className="rounded-2xl bg-[#111827] border border-slate-800 overflow-hidden"><button type="button" onClick={() => setExpanded(open?null:m.key)} className="w-full text-left p-5 flex flex-col md:flex-row md:items-center gap-4"><div className="flex-1"><div className="text-[10px] uppercase tracking-wider text-slate-500">{m.channel.replace('_',' ')}</div><h2 className="text-base font-semibold text-white mt-1">{m.name}</h2><p className="text-xs text-slate-500 mt-1">{m.assesses}</p></div><div className="md:w-64"><div className="text-[10px] uppercase text-slate-500">Latest available observation</div><div className="text-sm font-semibold text-slate-200 mt-1">{latestValue(m)}</div></div><span className="text-slate-500">{open?'−':'+'}</span></button>{open && <div className="border-t border-slate-800 p-5 grid md:grid-cols-2 gap-5 text-sm"><div><div className="flex items-center gap-1 text-slate-300 font-medium">What is it? <InfoButton title={m.name}>{m.assesses}</InfoButton></div><p className="text-slate-400 mt-1 leading-6">{m.assesses}.</p></div><div><h3 className="text-slate-300 font-medium">Why NUVYRA measures it</h3><p className="text-slate-400 mt-1 leading-6">{m.why}</p></div><div><h3 className="text-slate-300 font-medium">What the measurement may tell us</h3><p className="text-slate-400 mt-1 leading-6">{m.mayTell}</p></div><div><h3 className="text-slate-300 font-medium">What it is assessing</h3><p className="text-slate-400 mt-1 leading-6">{m.assesses}</p></div><div><h3 className="text-slate-300 font-medium">What can affect it</h3><p className="text-slate-400 mt-1 leading-6">{m.affectedBy}</p></div><div><h3 className="text-slate-300 font-medium">Important limitation</h3><p className="text-slate-400 mt-1 leading-6">{m.limitation}</p></div>{latest && <div className="md:col-span-2 rounded-xl bg-slate-950/50 p-4"><h3 className="text-slate-300 font-medium">How NUVYRA uses it in your longitudinal record</h3><p className="text-slate-400 mt-1 leading-6">The value can be compared with your personal baseline when enough history exists. The latest AI run reported {latest.baseline_observations} baseline observation(s) and {Math.round(latest.data_quality_score*100)}% data quality. This parameter is one input among others; it is not interpreted in isolation.</p></div>}</div>}</article>; })}</div>}
+    <section className="rounded-2xl bg-[#111827] border border-slate-800 p-5"><h2 className="text-lg font-semibold text-white">Where the measurements come from</h2><div className="grid md:grid-cols-3 gap-4 mt-4 text-sm"><div><b className="text-slate-200">Microphone</b><p className="text-slate-500 mt-1">Voice and speech acoustics.</p></div><div><b className="text-slate-200">Camera</b><p className="text-slate-500 mt-1">Facial, eye, head, movement and breathing-related visual proxies.</p></div><div><b className="text-slate-200">You + clinical context</b><p className="text-slate-500 mt-1">Self-reported feeling, symptoms, and available clinical data such as vitals, labs, medications or uploaded reports.</p></div></div></section>
+  </div>;
 };
