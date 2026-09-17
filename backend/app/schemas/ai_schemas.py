@@ -11,11 +11,18 @@ class AIAnalysisRequest(BaseModel):
     """Features collected during one monitoring session.
 
     Sensor modalities are optional so missing or unusable signals do not
-    prevent an observational analysis.
+    prevent an observational analysis. Self-report dimensions are also
+    optional context signals and are not clinical assessments.
     """
     fatigue: float = Field(ge=0, le=10)
     mood_deviation: float = Field(ge=0, le=1)
     symptom_burden: float = Field(default=0, ge=0, le=1)
+    energy_level: Optional[float] = Field(default=None, ge=0, le=10)
+    sleep_quality: Optional[float] = Field(default=None, ge=0, le=10)
+    stress_level: Optional[float] = Field(default=None, ge=0, le=10)
+    concentration_level: Optional[float] = Field(default=None, ge=0, le=10)
+    physical_comfort: Optional[float] = Field(default=None, ge=0, le=10)
+    appetite_level: Optional[float] = Field(default=None, ge=0, le=10)
     voice_rms: Optional[float] = Field(default=None, ge=0)
     voice_zero_crossing_rate: Optional[float] = Field(default=None, ge=0, le=1)
     voice_pitch_hz: Optional[float] = Field(default=None, ge=50, le=1000)
