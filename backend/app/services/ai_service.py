@@ -19,8 +19,8 @@ from app.db.models.past_history import HealthReminder, MedicalDocument, PastHist
 from app.schemas.ai_schemas import AIAnalysisRequest, AIAnalysisResponse, AIHistoryPoint, AIHistoryResponse, AIContextSummary, BiomarkerFeatureRead
 
 MODEL_NAME = "Nuvyra Multimodal Longitudinal Biomarker Engine"
-MODEL_VERSION = "2.2.1"
-FEATURES = (("fatigue", "survey"), ("mood_deviation", "survey"), ("symptom_burden", "survey"), ("voice_rms", "voice"), ("voice_zero_crossing_rate", "voice"), ("voice_pitch_hz", "voice"), ("voice_speech_activity", "voice"), ("voice_speech_rate", "voice"), ("voice_pause_ratio", "voice"), ("face_motion", "facial_dynamics"), ("face_luminance_variability", "facial_dynamics"), ("face_blink_proxy", "eye"), ("blink_rate_per_minute", "eye"), ("eye_opening_proxy", "eye"), ("gait_motion", "gait_movement"), ("gait_variability", "gait_movement"), ("gait_symmetry_proxy", "gait_movement"), ("breathing_rate_per_minute", "breathing"), ("breathing_variability", "breathing"), ("head_motion", "head_movement"), ("head_motion_variability", "head_movement"))
+MODEL_VERSION = "2.3.0"
+FEATURES = (("fatigue", "survey"), ("mood_deviation", "survey"), ("symptom_burden", "survey"), ("energy_level", "survey"), ("sleep_quality", "survey"), ("stress_level", "survey"), ("concentration_level", "survey"), ("physical_comfort", "survey"), ("appetite_level", "survey"), ("voice_rms", "voice"), ("voice_zero_crossing_rate", "voice"), ("voice_pitch_hz", "voice"), ("voice_speech_activity", "voice"), ("voice_speech_rate", "voice"), ("voice_pause_ratio", "voice"), ("face_motion", "facial_dynamics"), ("face_luminance_variability", "facial_dynamics"), ("face_blink_proxy", "eye"), ("blink_rate_per_minute", "eye"), ("eye_opening_proxy", "eye"), ("gait_motion", "gait_movement"), ("gait_variability", "gait_movement"), ("gait_symmetry_proxy", "gait_movement"), ("breathing_rate_per_minute", "breathing"), ("breathing_variability", "breathing"), ("head_motion", "head_movement"), ("head_motion_variability", "head_movement"))
 MODALITY_NAMES = ["survey", "voice", "facial_dynamics", "eye", "gait_movement", "breathing", "head_movement"]
 
 class AIService:
