@@ -4,7 +4,7 @@ Document analysis is organizational research assistance only. It does not
 interpret results diagnostically, prescribe treatment, or decide that a test
 is medically necessary.
 """
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from io import BytesIO
 from typing import Optional
 import json
@@ -128,3 +128,46 @@ def complete_reminder(reminder_id: uuid.UUID, db: Session = Depends(get_db), cur
     reminder=db.scalar(select(HealthReminder).where(HealthReminder.id==reminder_id,HealthReminder.user_id==current_user.id))
     if not reminder: raise HTTPException(404,"Reminder not found.")
     reminder.completed=True; db.commit(); return {"message":"Reminder completed."}
+
+
+
+def _reward_completed_check_in(db: Session, current_user: User, check_in_date: date) -> dict:
+    """Award coins for the first completed check-in on a calendar day.
+
+    The reward recognizes consistent monitoring behavior only. It never
+    rewards medication use, test results, symptom severity, or a health score.
+    """
+    if current_user.reward_last_check_in_date and current_user.reward_last_check_in_date.date() == check_in_date:
+        return {"coins_awarded": 0, "coins": current_user.reward_coins, "streak": current_user.reward_streak, "already_rewarded_today": True}
+
+    previous_date = check_in_date - timedelta(days=1)
+    if current_user.reward_last_check_in_date and current_user.reward_last_check_in_date.date() == previous_date:
+        current_user.reward_streak += 1
+    else:
+        current_user.reward_streak = 1
+
+    coins = 10
+    milestone_bonus = 25 if current_user.reward_streak % 7 == 0 else 0
+    current_user.reward_coins += coins + milestone_bonus
+    current_user.reward_last_check_in_date = datetime.combine(check_in_date, datetime.min.time(), tzinfo=timezone.utc)
+    return {
+        "coins_awarded": coins + milestone_bonus,
+        "coins": current_user.reward_coins,
+        "streak": current_user.reward_streak,
+        "milestone_bonus": milestone_bonus,
+        "already_rewarded_today": False,
+    }
+
+
+@router.get("/rewards")
+def get_rewards(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return {
+        "coins": current_user.reward_coins,
+        "streak": current_user.reward_streak,
+        "last_check_in_date": current_user.reward_last_check_in_date.date().isoformat() if current_user.reward_last_check_in_date else None,
+        "rules": {
+            "daily_check_in": 10,
+            "seven_day_milestone_bonus": 25,
+            "purpose": "Rewards recognize consistent NUVYRA check-in participation; they are not medical incentives or treatment rewards."
+        }
+    }
