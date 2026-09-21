@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { TrendChart } from '../components/common/TrendChart';
 import { aiService, AIAnalysisResponse, AIHistoryResponse, BiomarkerFeature } from '../services/aiService';
+import { apiClient } from '../services/api';
 
 const signalName = (raw: string) => {
   const k = raw.toLowerCase();
@@ -62,7 +63,7 @@ export const DashboardPage: React.FC = () => {
   const [latest, setLatest] = useState<AIAnalysisResponse | null>(null);
   const [history, setHistory] = useState<AIHistoryResponse | null>(null);
   const [rewards, setRewards] = useState<{ coins: number; streak: number; last_check_in_date?: string | null } | null>(null);
-  useEffect(() => { let active = true; Promise.allSettled([aiService.latest(), aiService.history(30), import('../services/api').then(m => m.apiClient.get('/past-history/rewards'))]).then(([a,b,c]) => { if (!active) return; if (a.status === 'fulfilled') setLatest(a.value); if (b.status === 'fulfilled') setHistory(b.value); if (c.status === 'fulfilled') setRewards(c.value.data); }); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; Promise.allSettled([aiService.latest(), aiService.history(30), apiClient.get('/past-history/rewards')]).then(([a,b,c]) => { if (!active) return; if (a.status === 'fulfilled') setLatest(a.value); if (b.status === 'fulfilled') setHistory(b.value); if (c.status === 'fulfilled') setRewards(c.value.data); }); return () => { active = false; }; }, []);
   const score = latest?.overall_score ?? 0;
   const trend = latest?.trend ?? 'INITIAL';
   const status = score >= 80 ? 'stable' : score >= 60 ? 'improving' : 'variation';
