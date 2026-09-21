@@ -24,6 +24,9 @@ class User(Base, UUIDMixin, TimestampMixin):
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reward_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reward_last_check_in_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     patient_profile: Mapped[Optional["PatientProfile"]] = relationship(
         "PatientProfile", back_populates="user", foreign_keys="PatientProfile.user_id",
