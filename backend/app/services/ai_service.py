@@ -16,6 +16,7 @@ from app.db.models.biomarker_feature import BiomarkerFeature
 from app.db.models.daily_check_in import DailyCheckIn
 from app.db.models.health_stability_score import HealthStabilityScore
 from app.db.models.past_history import HealthReminder, MedicalDocument, PastHistoryRecord
+from app.db.models.user import User
 from app.schemas.ai_schemas import AIAnalysisRequest, AIAnalysisResponse, AIHistoryPoint, AIHistoryResponse, AIContextSummary, BiomarkerFeatureRead
 
 MODEL_NAME = "Nuvyra Multimodal Longitudinal Biomarker Engine"
@@ -200,7 +201,7 @@ class AIService:
         metadata = {"model_name":MODEL_NAME,"model_version":MODEL_VERSION,"algorithm":algorithm,"baseline_observations":len(history),"data_quality_score":quality,"modalities_present":modalities,"missing_modalities":missing,"top_drivers":drivers,"recommendations":recommendations,"limitations":limitations,"persistence_signal":persistence,"source_duration_seconds":payload.source_duration_seconds,"voice_language":payload.voice_language,"context":context.model_dump()}
         self.db.add(HealthStabilityScore(check_in_id=check_in.id, overall_score=round(score,2), trend_category=trend, confidence=round(confidence,3), generated_at=now, explanation_summary=explanation, model_metadata=metadata))
         from app.api.v1.past_history_router import _reward_completed_check_in
-        reward = _reward_completed_check_in(self.db, self.db.get(__import__("app.db.models.user", fromlist=["User"]).User, user_id), date.today())
+        reward = _reward_completed_check_in(self.db, self.db.get(User, user_id), date.today())
         self.db.commit()
         return AIAnalysisResponse(check_in_id=check_in.id, overall_score=round(score,2), trend=trend, confidence=round(confidence,3), model_name=MODEL_NAME, model_version=MODEL_VERSION, baseline_observations=len(history), explanation=explanation, features=feature_reads, generated_at=now, data_quality_score=quality, modalities_present=modalities, top_drivers=drivers, recommendations=recommendations, limitations=limitations, missing_modalities=missing, persistence_signal=persistence, context=context)
 
