@@ -54,8 +54,12 @@ class AuthenticationService:
             self.audit_service.record_event(action="LOGIN_FAILED", actor_email=payload.email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"reason": "User not found"})
             raise InvalidCredentialsException()
         now = datetime.now(timezone.utc)
-        if user.locked_until and user.locked_until > now:
-            raise AccountLockedException(f"Account is locked until {user.locked_until.isoformat()} UTC.")
+        if user.locked_until:
+            locked_until = user.locked_until
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if locked_until > now:
+                raise AccountLockedException(f"Account is locked until {locked_until.isoformat()} UTC.")
         if not user.is_active:
             raise AccountDisabledException()
         if not verify_password(payload.password, user.hashed_password):
