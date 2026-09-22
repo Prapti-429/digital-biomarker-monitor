@@ -135,7 +135,7 @@ def search_patient_roster(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     q: Optional[str] = Query(None, description="Search term for name, MRN, or diagnosis"),
-    clinician_id: Optional[int] = Query(None, description="Filter by treating clinician User ID"),
+    clinician_id: Optional[uuid.UUID] = Query(None, description="Filter by treating clinician User UUID"),
     disease_phase: Optional[str] = Query(None, description="Filter by CML disease phase"),
     is_active: bool = Query(True, description="Filter by active status"),
     page: int = Query(default=1, ge=1),
