@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
     DB_ECHO: bool = False
+    # Comma-separated browser origins allowed to call the API. Keep this
+    # explicit in production instead of relying on a wildcard CORS policy.
+    CORS_ORIGINS: str = "https://digital-biomarker-monitor.onrender.com"
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
