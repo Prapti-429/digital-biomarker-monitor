@@ -1,8 +1,8 @@
-"""Ensure patient history/document/reminder tables exist.
+"""Ensure patient history/document/reminder tables and indexes exist.
 
-The bootstrap migration already creates ORM-managed tables. This follow-up
-migration is intentionally idempotent and uses the same SQLAlchemy metadata
-as the application, avoiding duplicate/manual index definitions.
+The bootstrap migration creates ORM-managed tables. This follow-up migration
+repairs partially-created databases as well: existing tables are preserved,
+missing ORM indexes are created, and nothing is destructively dropped.
 """
 
 from alembic import op
@@ -29,13 +29,19 @@ def upgrade() -> None:
 
     for table_name in TABLES:
         table = Base.metadata.tables.get(table_name)
-        if table is not None:
-            # checkfirst makes this safe when bootstrap_schema_002 already
-            # created the table, while also repairing databases where it is
-            # genuinely missing.
-            table.create(bind=bind, checkfirst=True)
+        if table is None:
+            continue
+
+        # Create the table only when it is genuinely absent.
+        table.create(bind=bind, checkfirst=True)
+
+        # A previous version of this migration could create the table but fail
+        # while creating an index. Create each metadata index independently so
+        # a partially-applied database is repaired on the next deployment.
+        for index in table.indexes:
+            index.create(bind=bind, checkfirst=True)
 
 
 def downgrade() -> None:
-    # Keep patient data safe. Schema rollback is intentionally non-destructive.
+    # Never destroy patient/biomarker data as part of a migration rollback.
     pass
