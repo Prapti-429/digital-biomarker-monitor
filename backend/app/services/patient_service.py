@@ -81,7 +81,7 @@ class PatientService:
     def get_patient_by_id(
         self,
         patient_id: uuid.UUID,
-        actor_id: int,
+        actor_id: uuid.UUID,
         actor_role: UserRole,
     ) -> PatientProfile:
         """
