@@ -43,14 +43,16 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# NUVYRA uses Bearer tokens rather than browser cookies. CORS therefore does
-# not need credentialed requests. Using an explicit wildcard here prevents a
-# renamed Render frontend, preview deployment, or custom HTTPS domain from
-# being turned into a misleading browser-level "Network Error" during public
-# registration. Authentication and all server-side validation remain enforced.
+# NUVYRA uses Bearer tokens rather than browser cookies. Keep browser
+# origins explicit while allowing Render/custom domains through CORS_ORIGINS.
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in settings.CORS_ORIGINS.split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
