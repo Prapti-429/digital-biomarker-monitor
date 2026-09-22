@@ -90,7 +90,7 @@ def test_create_patient_profile_and_mrn_generation(
     response = client.post("/api/v1/patients", json=payload, headers=headers)
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
-    assert data["user_id"] == test_patient_user.id
+    assert data["user_id"] == str(test_patient_user.id)
     assert data["first_name"] == "Jane"
     assert data["medical_record_number"].startswith("CML-")
     assert data["age"] > 0
@@ -104,7 +104,7 @@ def test_get_my_patient_profile(client: TestClient, test_patient_user: User) -> 
     client.post(
         "/api/v1/patients",
         json={
-            "user_id": test_patient_user.id,
+            "user_id": str(test_patient_user.id),
             "first_name": "Jane",
             "last_name": "Patient",
             "date_of_birth": "1985-05-15",
