@@ -52,7 +52,7 @@ class PatientBase(BaseModel):
     current_disease_status: Optional[str] = Field("Active Treatment", max_length=100)
     treatment_phase: Optional[str] = Field(None, max_length=100)
     hospital_affinity: Optional[str] = Field(None, max_length=255)
-    treating_physician_id: Optional[int] = Field(None, description="User ID of primary treating physician")
+    treating_physician_id: Optional[uuid.UUID] = Field(None, description="User UUID of primary treating physician")
     clinical_notes: Optional[str] = Field(None, description="Free-text clinical summary")
 
 
@@ -94,7 +94,7 @@ class PatientUpdate(BaseModel):
     current_disease_status: Optional[str] = Field(None, max_length=100)
     treatment_phase: Optional[str] = Field(None, max_length=100)
     hospital_affinity: Optional[str] = Field(None, max_length=255)
-    treating_physician_id: Optional[int] = None
+    treating_physician_id: Optional[uuid.UUID] = None
     clinical_notes: Optional[str] = None
     is_active: Optional[bool] = None
 
