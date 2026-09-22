@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.exception_handlers import register_security_exception_handlers
 from app.core.logging_config import setup_logging
 from app.db.session import engine
 from app.middlewares.security import SecurityHeadersMiddleware
@@ -42,6 +43,7 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProcessTimingMiddleware)
 app.include_router(api_router, prefix=settings.API_V1_STR)
+register_security_exception_handlers(app)
 
 # NUVYRA uses Bearer tokens rather than browser cookies. Keep browser
 # origins explicit while allowing Render/custom domains through CORS_ORIGINS.
