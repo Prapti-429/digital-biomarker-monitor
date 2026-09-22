@@ -5,6 +5,7 @@ Provides immutable persistence and filtering utilities for security and complian
 """
 
 from typing import Optional, Dict, Any, List
+from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,7 +25,7 @@ class AuditLogRepository(BaseRepository[AuditLog, None, None]):
     def log_event(
         self,
         action: str,
-        user_id: Optional[int] = None,
+        user_id: Optional[UUID] = None,
         actor_email: Optional[str] = None,
         resource_type: Optional[str] = None,
         resource_id: Optional[str] = None,
@@ -32,9 +33,15 @@ class AuditLogRepository(BaseRepository[AuditLog, None, None]):
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         extra_data: Optional[Dict[str, Any]] = None,
+        resource: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
     ) -> AuditLog:
         """Persists an append-only security audit log entry."""
         try:
+            if resource and resource_type is None:
+                resource_type, _, resource_id = resource.partition(":")
+            if details:
+                extra_data = {**(extra_data or {}), **details}
             audit_entry = AuditLog(
                 user_id=user_id,
                 actor_email=actor_email,
@@ -55,7 +62,7 @@ class AuditLogRepository(BaseRepository[AuditLog, None, None]):
             raise RepositoryError(f"Failed to record audit log for action '{action}'", e)
 
     def get_logs_for_user(
-        self, user_id: int, pagination: PaginationParams
+        self, user_id: UUID, pagination: PaginationParams
     ) -> PaginatedResult[AuditLog]:
         """Fetches paginated audit logs associated with a specific user."""
         filters = {"user_id": user_id}
