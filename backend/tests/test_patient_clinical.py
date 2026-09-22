@@ -77,7 +77,7 @@ def test_create_patient_profile_and_mrn_generation(
     headers = get_auth_header(client, "patient@example.com", "SecurePassword123!")
 
     payload = {
-        "user_id": test_patient_user.id,
+        "user_id": str(test_patient_user.id),
         "first_name": "Jane",
         "last_name": "Patient",
         "date_of_birth": "1985-05-15",
