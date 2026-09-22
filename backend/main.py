@@ -23,12 +23,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting %s (v%s)", settings.PROJECT_NAME, settings.VERSION)
     logger.info("Database backend: %s", engine.url.get_backend_name())
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database schema is ready")
-    except Exception:
-        logger.exception("Database initialization failed")
-        raise
+    # Production schema is managed exclusively by Alembic migrations.
+    # The Render start command runs "alembic upgrade head" before uvicorn starts,
+    # so startup does not race schema creation or silently drift from migrations.
+    logger.info("Database schema is managed by Alembic migrations")
     yield
     logger.info("Shutting down %s", settings.PROJECT_NAME)
     engine.dispose()
