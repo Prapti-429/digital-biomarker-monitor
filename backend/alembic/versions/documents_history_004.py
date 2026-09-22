@@ -43,7 +43,7 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
     if not _index_exists(inspector, "past_history_records", "ix_past_history_records_user_id"):
         op.create_index("ix_past_history_records_user_id", "past_history_records", ["user_id"])
-    if not _index_exists(inspector, "idx_history_user_created"):
+    if not _index_exists(inspector, "past_history_records", "idx_history_user_created"):
         op.create_index("idx_history_user_created", "past_history_records", ["user_id", "created_at"])
 
     if not _table_exists(inspector, "medical_documents"):
@@ -83,7 +83,7 @@ def upgrade() -> None:
         op.create_index("ix_health_reminders_user_id", "health_reminders", ["user_id"])
     if not _index_exists(inspector, "ix_health_reminders_due_date"):
         op.create_index("ix_health_reminders_due_date", "health_reminders", ["due_date"])
-    if not _index_exists(inspector, "idx_reminder_user_due"):
+    if not _index_exists(inspector, "health_reminders", "idx_reminder_user_due"):
         op.create_index("idx_reminder_user_due", "health_reminders", ["user_id", "due_date"])
 
 
