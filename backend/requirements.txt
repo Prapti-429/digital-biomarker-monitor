@@ -7,6 +7,8 @@ pydantic>=2.6.4
 pydantic-settings>=2.2.1
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+# Passlib 1.7.x is incompatible with bcrypt 4.1+; pin the backend runtime to a supported bcrypt release.
+bcrypt>=4.0.1,<4.1
 python-multipart>=0.0.9
 email-validator>=2.1.0
 pytest>=8.0.0
