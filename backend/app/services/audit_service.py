@@ -5,6 +5,7 @@ Exposes clean application service interface for registering security events.
 """
 
 from typing import Optional, Dict, Any
+from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.repositories.audit_repository import AuditLogRepository
@@ -23,7 +24,7 @@ class AuditService:
     def record_event(
         self,
         action: str,
-        user_id: Optional[int] = None,
+        user_id: Optional[UUID] = None,
         actor_email: Optional[str] = None,
         resource_type: Optional[str] = None,
         resource_id: Optional[str] = None,
@@ -46,7 +47,7 @@ class AuditService:
         )
 
     def get_user_audit_logs(
-        self, user_id: int, page: int = 1, page_size: int = 20
+        self, user_id: UUID, page: int = 1, page_size: int = 20
     ) -> AuditLogListResponse:
         """Queries audit logs for a specific user."""
         pagination = PaginationParams(page=page, page_size=page_size)
