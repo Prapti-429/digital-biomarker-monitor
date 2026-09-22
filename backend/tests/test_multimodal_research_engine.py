@@ -57,6 +57,7 @@ def test_persistence_requires_history() -> None:
 
 def test_persistent_change_requires_repeated_deviation() -> None:
     engine = service()
+    deviations = {"voice_pitch_hz": 2.0}
     # Most-recent first. The same feature is meaningfully away from its
     # personal center in at least two of the last three usable sessions.
     history = [
@@ -66,7 +67,6 @@ def test_persistent_change_requires_repeated_deviation() -> None:
         (None, None, {"voice_pitch_hz": 99.0}),
         (None, None, {"voice_pitch_hz": 101.0}),
     ]
-    deviations = {"voice_pitch_hz": 2.0}
     assert engine._persistence(deviations, history) == "PERSISTENT_CHANGE"
 
 
