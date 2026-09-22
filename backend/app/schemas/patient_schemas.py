@@ -59,7 +59,7 @@ class PatientBase(BaseModel):
 class PatientCreate(PatientBase):
     """Payload required to instantiate a new PatientProfile bound to a User account."""
 
-    user_id: int = Field(..., description="Target User account ID to link with this profile")
+    user_id: uuid.UUID = Field(..., description="Target User account UUID to link with this profile")
 
 
 class PatientUpdate(BaseModel):
