@@ -19,6 +19,8 @@ from app.core.exceptions import (
     TokenRevokedError,
 )
 
+from app.repositories.base import DuplicateEntityError, EntityNotFoundError
+
 
 def register_security_exception_handlers(app: FastAPI) -> None:
     """Registers exception handlers on the provided FastAPI application instance."""
