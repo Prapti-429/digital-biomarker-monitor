@@ -11,9 +11,6 @@ from fastapi.responses import JSONResponse
 from app.core.exceptions import (
     AccountDisabledException,
     AccountLockedException,
-    AuthBaseException,
-    DuplicateEntityError,
-    EntityNotFoundError,
     InsufficientPermissionError,
     InvalidCredentialsException,
     InvalidTokenError,
@@ -90,12 +87,12 @@ def register_security_exception_handlers(app: FastAPI) -> None:
     async def duplicate_entity_handler(request: Request, exc: DuplicateEntityError) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"detail": exc.message, "code": "DUPLICATE_ENTITY"},
+            content={"detail": str(exc), "code": "DUPLICATE_ENTITY"},
         )
 
     @app.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": exc.message, "code": "NOT_FOUND"},
+            content={"detail": str(exc), "code": "NOT_FOUND"},
         )
