@@ -54,10 +54,16 @@ class AuthenticationService:
             self.audit_service.record_event(action="LOGIN_FAILED", actor_email=payload.email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"reason": "User not found"})
             raise InvalidCredentialsException()
         now = datetime.now(timezone.utc)
+        # SQLite/Postgres drivers can return timezone columns as naive datetimes.
+        # Normalize both sides before comparison so lockout logic is deterministic.
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
         if user.locked_until:
             locked_until = user.locked_until
             if locked_until.tzinfo is None:
                 locked_until = locked_until.replace(tzinfo=timezone.utc)
+            else:
+                locked_until = locked_until.astimezone(timezone.utc)
             if locked_until > now:
                 raise AccountLockedException(f"Account is locked until {locked_until.isoformat()} UTC.")
         if not user.is_active:
