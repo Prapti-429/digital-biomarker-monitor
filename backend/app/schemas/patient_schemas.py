@@ -105,7 +105,7 @@ class PatientRead(PatientBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    user_id: int
+    user_id: uuid.UUID
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
