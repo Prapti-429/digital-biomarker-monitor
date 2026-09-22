@@ -6,6 +6,18 @@ Provides immutable persistence and filtering utilities for security and complian
 
 from typing import Optional, Dict, Any, List
 from uuid import UUID
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -51,7 +63,7 @@ class AuditLogRepository(BaseRepository[AuditLog, None, None]):
                 status=status,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                extra_data=extra_data,
+                extra_data=_json_safe(extra_data) if extra_data is not None else None,
             )
             self.session.add(audit_entry)
             self.session.commit()
