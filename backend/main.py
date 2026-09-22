@@ -9,8 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.db.base import Base
-from app.db import models  # noqa: F401 - register ORM models
 from app.db.session import engine
 from app.middlewares.security import SecurityHeadersMiddleware
 from app.middlewares.timing import ProcessTimingMiddleware
