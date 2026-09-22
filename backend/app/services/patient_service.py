@@ -41,7 +41,7 @@ class PatientService:
     def create_patient_profile(
         self,
         schema: PatientCreate,
-        actor_id: int,
+        actor_id: uuid.UUID,
         actor_role: UserRole,
         ip_address: Optional[str] = None,
     ) -> PatientProfile:
@@ -100,7 +100,7 @@ class PatientService:
 
         return patient
 
-    def get_patient_by_user_id(self, user_id: int) -> PatientProfile:
+    def get_patient_by_user_id(self, user_id: uuid.UUID) -> PatientProfile:
         """Retrieves a patient profile directly by associated User ID."""
         patient = self.patient_repo.get_by_user_id(user_id)
         if not patient:
@@ -144,13 +144,13 @@ class PatientService:
     def search_patient_roster(
         self,
         query: Optional[str] = None,
-        clinician_id: Optional[int] = None,
+        clinician_id: Optional[uuid.UUID] = None,
         disease_phase: Optional[str] = None,
         is_active: bool = True,
         page: int = 1,
         page_size: int = 20,
         actor_role: UserRole = UserRole.ADMINISTRATOR,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[uuid.UUID] = None,
     ) -> PatientListResponse:
         """
         Queries paginated patient rosters with automatic clinician filter scoping.
