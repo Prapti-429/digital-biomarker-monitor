@@ -30,7 +30,7 @@ class MedicationRegimenCreate(MedicationRegimenBase):
     """Payload to create a new medication regimen for a patient."""
 
     patient_id: uuid.UUID = Field(..., description="Target Patient UUID")
-    prescribing_clinician_id: Optional[int] = Field(None, description="User ID of prescribing clinician")
+    prescribing_clinician_id: Optional[uuid.UUID] = Field(None, description="User UUID of prescribing clinician")
 
 
 class MedicationRegimenUpdate(BaseModel):
@@ -59,7 +59,7 @@ class MedicationRegimenRead(MedicationRegimenBase):
     is_active: bool
     missed_dose_counter: int
     adherence_percentage: float
-    prescribing_clinician_id: Optional[int] = None
+    prescribing_clinician_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
