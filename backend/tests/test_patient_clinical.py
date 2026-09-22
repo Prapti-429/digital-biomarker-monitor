@@ -130,7 +130,7 @@ def test_rbac_patient_isolation(
     p1_resp = client.post(
         "/api/v1/patients",
         json={
-            "user_id": test_patient_user.id,
+            "user_id": str(test_patient_user.id),
             "first_name": "Jane",
             "last_name": "Patient",
             "date_of_birth": "1985-05-15",
@@ -159,7 +159,7 @@ def test_medication_prescribing_and_adherence_tracking(
     p_resp = client.post(
         "/api/v1/patients",
         json={
-            "user_id": test_patient_user.id,
+            "user_id": str(test_patient_user.id),
             "first_name": "Jane",
             "last_name": "Patient",
             "date_of_birth": "1985-05-15",
@@ -227,7 +227,7 @@ def test_vital_signs_and_automatic_bmi_calculation(
     p_resp = client.post(
         "/api/v1/patients",
         json={
-            "user_id": test_patient_user.id,
+            "user_id": str(test_patient_user.id),
             "first_name": "Jane",
             "last_name": "Patient",
             "date_of_birth": "1985-05-15",
@@ -262,7 +262,7 @@ def test_bcr_abl_pcr_laboratory_record(
     p_resp = client.post(
         "/api/v1/patients",
         json={
-            "user_id": test_patient_user.id,
+            "user_id": str(test_patient_user.id),
             "first_name": "Jane",
             "last_name": "Patient",
             "date_of_birth": "1985-05-15",
