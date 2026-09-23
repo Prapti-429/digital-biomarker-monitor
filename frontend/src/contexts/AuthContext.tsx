@@ -55,7 +55,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
+    const normalizedEmail = email.trim().toLowerCase();
+    const response = await apiClient.post('/auth/login', {
+      email: normalizedEmail,
+      password,
+    });
     const { access_token, refresh_token } = response.data || {};
 
     if (!access_token) {
@@ -67,8 +71,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
     setToken(access_token);
 
-    const currentUser = await loadCurrentUser();
-    setUser(currentUser);
+    try {
+      const currentUser = await loadCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      throw Object.assign(
+        new Error('Signed in, but the profile could not be loaded yet. Please retry.'),
+        { cause: error },
+      );
+    }
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
