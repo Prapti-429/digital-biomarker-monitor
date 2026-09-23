@@ -52,12 +52,26 @@ class SessionRepository(BaseRepository[UserSession, None, None]):
     def get_active_session(self, session_id: str) -> Optional[UserSession]:
         """Retrieves a valid, non-revoked session by ID."""
         try:
+            # Normalize expiry in Python because some database drivers return
+            # timezone columns as naive datetimes. This prevents /auth/me from
+            # failing immediately after a successful login.
             stmt = select(UserSession).where(
                 UserSession.id == session_id,
                 UserSession.is_revoked == False,
-                UserSession.expires_at > datetime.now(timezone.utc),
             )
-            return self.session.execute(stmt).scalar_one_or_none()
+            db_session = self.session.execute(stmt).scalar_one_or_none()
+            if db_session is None:
+                return None
+
+            expires_at = db_session.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            else:
+                expires_at = expires_at.astimezone(timezone.utc)
+
+            if expires_at <= datetime.now(timezone.utc):
+                return None
+            return db_session
         except SQLAlchemyError as e:
             raise RepositoryError(f"Error querying active session {session_id}", e)
 
