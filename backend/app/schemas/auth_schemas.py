@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.security import validate_password_complexity
 from app.schemas.auth_enums import UserRole
+from app.schemas.user_schemas import UserRead
 
 
 # =============================================================================
@@ -88,6 +89,7 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(..., description="Long-lived JWT Refresh Token")
     token_type: str = Field(default="Bearer", description="OAuth2 Token Type")
     expires_in: int = Field(..., description="Access token lifetime in seconds")
+    user: Optional[UserRead] = Field(None, description="Authenticated user profile returned with the token pair")
 
 
 class UserSessionResponse(BaseModel):
