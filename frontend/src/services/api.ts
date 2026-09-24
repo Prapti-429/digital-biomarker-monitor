@@ -59,7 +59,13 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
     if (!originalRequest) return Promise.reject(error);
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const requestUrl = String(originalRequest.url || '');
+    const isAuthEndpoint =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/register') ||
+      requestUrl.includes('/auth/refresh');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         originalRequest._retry = true;
