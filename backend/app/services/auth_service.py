@@ -82,10 +82,16 @@ class AuthenticationService:
         user.last_login_at = now
         self.db.commit()
 
+        persisted_role = str(user.role).strip().lower()
+        # Older prototype data used "admin"; keep those accounts compatible
+        # without granting any new privilege beyond administrator.
+        if persisted_role == "admin":
+            persisted_role = UserRole.ADMINISTRATOR.value
         try:
-            role = UserRole(str(user.role).strip().lower())
-        except ValueError as exc:
-            raise InvalidTokenError(f"Account has unsupported role '{user.role}'. Contact an administrator.") from exc
+            role = UserRole(persisted_role)
+        except ValueError:
+            # Unknown legacy roles are treated as least-privileged patients.
+            role = UserRole.PATIENT
         session_expiry = now + timedelta(days=self.jwt_engine.refresh_token_expire_days)
         session = self.session_repo.create_session(user_id=user.id, expires_at=session_expiry, ip_address=ip_address, user_agent=user_agent, device_fingerprint=payload.device_fingerprint)
         permissions = self.authz_service.get_user_permissions(role)
@@ -128,7 +134,13 @@ class AuthenticationService:
         user = self.user_repo.get_by_id(user_id)
         if not user or not user.is_active:
             raise InvalidTokenError("User account is unavailable.")
-        role = UserRole(user.role)
+        persisted_role = str(user.role).strip().lower()
+        if persisted_role == "admin":
+            persisted_role = UserRole.ADMINISTRATOR.value
+        try:
+            role = UserRole(persisted_role)
+        except ValueError:
+            role = UserRole.PATIENT
         permissions = self.authz_service.get_user_permissions(role)
         new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
         new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
