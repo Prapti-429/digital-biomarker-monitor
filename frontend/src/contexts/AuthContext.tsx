@@ -27,6 +27,28 @@ const loadCurrentUser = async (): Promise<User> => {
   return response.data as User;
 };
 
+const decodeAccessTokenUser = (accessToken: string): User | null => {
+  try {
+    const payloadPart = accessToken.split('.')[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const payload = JSON.parse(window.atob(padded)) as {
+      sub?: string;
+      role?: string;
+    };
+    if (!payload.sub) return null;
+    return {
+      id: payload.sub,
+      email: '',
+      role: payload.role || 'patient',
+      is_active: true,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('nuvyra_token'));
@@ -74,11 +96,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const currentUser = await loadCurrentUser();
       setUser(currentUser);
-    } catch (error) {
-      throw Object.assign(
-        new Error('Signed in, but the profile could not be loaded yet. Please retry.'),
-        { cause: error },
-      );
+    } catch {
+      // Login itself succeeded and the access token is valid. Do not turn a
+      // secondary /auth/me/profile failure into a false "authentication failed"
+      // message. The token can still protect API requests, and the normal auth
+      // bootstrap will retry the profile request on the next page load.
+      const tokenUser = decodeAccessTokenUser(access_token);
+      if (tokenUser) {
+        setUser(tokenUser);
+        return;
+      }
+      throw new Error('Signed in, but the session profile could not be loaded. Please refresh and try again.');
     }
   };
 
