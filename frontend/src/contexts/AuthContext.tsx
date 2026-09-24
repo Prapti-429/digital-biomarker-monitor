@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: normalizedEmail,
       password,
     });
-    const { access_token, refresh_token } = response.data || {};
+    const { access_token, refresh_token, user: authenticatedUser } = response.data || {};
 
     if (!access_token) {
       throw new Error('The server did not return a valid access token.');
@@ -92,6 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('access_token', access_token);
     if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
     setToken(access_token);
+
+    // The login response now includes the authenticated profile, so the UI
+    // does not depend on a second request before considering login successful.
+    if (authenticatedUser?.id) {
+      setUser(authenticatedUser as User);
+    }
 
     try {
       const currentUser = await loadCurrentUser();
