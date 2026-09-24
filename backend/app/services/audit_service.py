@@ -1,22 +1,24 @@
-"""
-Audit Service.
+"""Audit service for security/compliance events.
 
-Exposes clean application service interface for registering security events.
+Audit logging must never turn an otherwise valid authentication operation into
+an authentication failure. Persistence errors are logged and the primary
+request is allowed to continue.
 """
 
+import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.repositories.audit_repository import AuditLogRepository
 from app.schemas.audit_schemas import AuditLogRead, AuditLogListResponse
-from app.repositories.base import PaginationParams
+from app.repositories.base import PaginationParams, RepositoryError
+
+logger = logging.getLogger(__name__)
 
 
 class AuditService:
-    """
-    Service responsible for handling security and compliance audit logging.
-    """
+    """Service responsible for security/compliance audit events."""
 
     def __init__(self, db: Session) -> None:
         self.audit_repo = AuditLogRepository(db)
@@ -33,18 +35,26 @@ class AuditService:
         user_agent: Optional[str] = None,
         extra_data: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Asynchronously or synchronously writes an audit entry."""
-        self.audit_repo.log_event(
-            action=action,
-            user_id=user_id,
-            actor_email=actor_email,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            status=status,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            extra_data=extra_data,
-        )
+        """Write an audit event without making the primary operation fail.
+
+        Authentication, registration, and logout must not be reported to the
+        user as failures merely because audit persistence is temporarily
+        unavailable. The failure is retained in server logs for diagnosis.
+        """
+        try:
+            self.audit_repo.log_event(
+                action=action,
+                user_id=user_id,
+                actor_email=actor_email,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                status=status,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                extra_data=extra_data,
+            )
+        except RepositoryError:
+            logger.exception("Audit event could not be persisted: %s", action)
 
     def get_user_audit_logs(
         self, user_id: UUID, page: int = 1, page_size: int = 20
