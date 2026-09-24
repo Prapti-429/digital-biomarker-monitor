@@ -145,7 +145,13 @@ class AuthenticationService:
         new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
         new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=new_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(new_refresh_token.encode()).hexdigest(), expires_at=new_payload.exp, parent_token_id=ref_record.id)
-        return TokenResponse(\n            access_token=new_access_token,\n            refresh_token=new_refresh_token,\n            token_type="Bearer",\n            expires_in=self.jwt_engine.access_token_expire_minutes * 60,\n            user=user,\n        )
+        return TokenResponse(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="Bearer",
+            expires_in=self.jwt_engine.access_token_expire_minutes * 60,
+            user=user,
+        )
 
     def logout(self, session_id: str, user_id: UUID) -> bool:
         revoked = self.session_repo.revoke_session(session_id)
