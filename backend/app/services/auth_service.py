@@ -89,7 +89,7 @@ class AuthenticationService:
         refresh_token, ref_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=ref_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(refresh_token.encode()).hexdigest(), expires_at=ref_payload.exp)
         self.audit_service.record_event(action="LOGIN_SUCCESS", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="Bearer", expires_in=self.jwt_engine.access_token_expire_minutes * 60)
+        return TokenResponse(\n            access_token=access_token,\n            refresh_token=refresh_token,\n            token_type="Bearer",\n            expires_in=self.jwt_engine.access_token_expire_minutes * 60,\n            user=user,\n        )
 
     def refresh_tokens(self, raw_refresh_token: str) -> TokenResponse:
         payload = self.jwt_engine.decode_token(raw_refresh_token, expected_type=TokenType.REFRESH)
@@ -115,7 +115,7 @@ class AuthenticationService:
         new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
         new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=new_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(new_refresh_token.encode()).hexdigest(), expires_at=new_payload.exp, parent_token_id=ref_record.id)
-        return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token, token_type="Bearer", expires_in=self.jwt_engine.access_token_expire_minutes * 60)
+        return TokenResponse(\n            access_token=new_access_token,\n            refresh_token=new_refresh_token,\n            token_type="Bearer",\n            expires_in=self.jwt_engine.access_token_expire_minutes * 60,\n            user=user,\n        )
 
     def logout(self, session_id: str, user_id: UUID) -> bool:
         revoked = self.session_repo.revoke_session(session_id)
