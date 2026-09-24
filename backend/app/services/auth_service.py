@@ -49,9 +49,10 @@ class AuthenticationService:
         return user
 
     def authenticate_user(self, payload: LoginRequest, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> TokenResponse:
-        user = self.user_repo.get_by_email(payload.email)
+        normalized_email = str(payload.email).strip().lower()
+        user = self.user_repo.get_by_email(normalized_email)
         if not user:
-            self.audit_service.record_event(action="LOGIN_FAILED", actor_email=payload.email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"reason": "User not found"})
+            self._safe_audit(action="LOGIN_FAILED", actor_email=normalized_email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"reason": "User not found"})
             raise InvalidCredentialsException()
         now = datetime.now(timezone.utc)
         # SQLite/Postgres drivers can return timezone columns as naive datetimes.
@@ -73,7 +74,7 @@ class AuthenticationService:
             if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
                 user.locked_until = now + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
             self.db.commit()
-            self.audit_service.record_event(action="LOGIN_FAILED", user_id=user.id, actor_email=user.email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"attempts": user.failed_login_attempts})
+            self._safe_audit(action="LOGIN_FAILED", user_id=user.id, actor_email=user.email, status="FAILURE", ip_address=ip_address, user_agent=user_agent, extra_data={"attempts": user.failed_login_attempts})
             raise InvalidCredentialsException()
 
         user.failed_login_attempts = 0
@@ -81,15 +82,26 @@ class AuthenticationService:
         user.last_login_at = now
         self.db.commit()
 
-        role = UserRole(user.role)
+        try:
+            role = UserRole(str(user.role).strip().lower())
+        except ValueError as exc:
+            raise InvalidTokenError(f"Account has unsupported role '{user.role}'. Contact an administrator.") from exc
         session_expiry = now + timedelta(days=self.jwt_engine.refresh_token_expire_days)
         session = self.session_repo.create_session(user_id=user.id, expires_at=session_expiry, ip_address=ip_address, user_agent=user_agent, device_fingerprint=payload.device_fingerprint)
         permissions = self.authz_service.get_user_permissions(role)
         access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
         refresh_token, ref_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=ref_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(refresh_token.encode()).hexdigest(), expires_at=ref_payload.exp)
-        self.audit_service.record_event(action="LOGIN_SUCCESS", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
+        self._safe_audit(action="LOGIN_SUCCESS", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
         return TokenResponse(\n            access_token=access_token,\n            refresh_token=refresh_token,\n            token_type="Bearer",\n            expires_in=self.jwt_engine.access_token_expire_minutes * 60,\n            user=user,\n        )
+
+    def _safe_audit(self, **kwargs) -> None:
+        """Best-effort audit logging; audit failure must not break authentication."""
+        try:
+            self.audit_service.record_event(**kwargs)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Authentication audit event failed")
 
     def refresh_tokens(self, raw_refresh_token: str) -> TokenResponse:
         payload = self.jwt_engine.decode_token(raw_refresh_token, expected_type=TokenType.REFRESH)
