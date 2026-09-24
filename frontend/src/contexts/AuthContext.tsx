@@ -22,6 +22,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const clearStoredAuth = () => { localStorage.removeItem('nuvyra_token'); localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); };
+
 const loadCurrentUser = async (): Promise<User> => {
   const response = await apiClient.get('/auth/me');
   return response.data as User;
@@ -62,12 +64,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const currentUser = await loadCurrentUser();
           setUser(currentUser);
           setToken(storedToken);
-        } catch {
-          localStorage.removeItem('nuvyra_token');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          setToken(null);
-          setUser(null);
+        } catch (error: any) {
+          if (error?.status === 401 || error?.code === 'HTTP_401') { clearStoredAuth(); setToken(null); setUser(null); }
+          else { setToken(storedToken); }
         }
       }
       setIsLoading(false);
