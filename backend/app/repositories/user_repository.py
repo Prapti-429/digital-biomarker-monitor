@@ -4,7 +4,7 @@ and user account lifecycle operations.
 """
 
 from typing import Optional, Any, Dict
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -31,7 +31,8 @@ class UserRepository(BaseRepository[User, Any, Any]):
         Find a active user by their email address.
         """
         try:
-            stmt = select(User).where(User.email == email.strip().lower())
+            normalized_email = str(email).strip().lower()
+            stmt = select(User).where(func.lower(User.email) == normalized_email)
             return self.session.execute(stmt).scalar_one_or_none()
         except SQLAlchemyError as e:
             raise RepositoryError(f"Failed to query user by email '{email}'", e)
