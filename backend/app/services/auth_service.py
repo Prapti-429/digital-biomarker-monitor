@@ -93,7 +93,13 @@ class AuthenticationService:
         refresh_token, ref_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=ref_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(refresh_token.encode()).hexdigest(), expires_at=ref_payload.exp)
         self._safe_audit(action="LOGIN_SUCCESS", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
-        return TokenResponse(\n            access_token=access_token,\n            refresh_token=refresh_token,\n            token_type="Bearer",\n            expires_in=self.jwt_engine.access_token_expire_minutes * 60,\n            user=user,\n        )
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="Bearer",
+            expires_in=self.jwt_engine.access_token_expire_minutes * 60,
+            user=user,
+        )
 
     def _safe_audit(self, **kwargs) -> None:
         """Best-effort audit logging; audit failure must not break authentication."""
