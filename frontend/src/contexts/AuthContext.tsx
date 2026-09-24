@@ -92,27 +92,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
     setToken(access_token);
 
-    // The login response now includes the authenticated profile, so the UI
-    // does not depend on a second request before considering login successful.
+    // The backend returns the authenticated profile in the same successful
+    // login response. Do not make a second /auth/me request part of login.
+    // This prevents a profile-query failure from being shown as an
+    // authentication failure.
     if (authenticatedUser?.id) {
       setUser(authenticatedUser as User);
+      return;
     }
 
-    try {
-      const currentUser = await loadCurrentUser();
-      setUser(currentUser);
-    } catch {
-      // Login itself succeeded and the access token is valid. Do not turn a
-      // secondary /auth/me/profile failure into a false "authentication failed"
-      // message. The token can still protect API requests, and the normal auth
-      // bootstrap will retry the profile request on the next page load.
-      const tokenUser = decodeAccessTokenUser(access_token);
-      if (tokenUser) {
-        setUser(tokenUser);
-        return;
-      }
-      throw new Error('Signed in, but the session profile could not be loaded. Please refresh and try again.');
-    }
+    throw new Error('The server authenticated the account but did not return the user profile. Please redeploy the backend and frontend.');
   };
 
   const register = async (email: string, password: string, fullName?: string) => {
