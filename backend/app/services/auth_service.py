@@ -145,6 +145,7 @@ class AuthenticationService:
         new_access_token, _ = self.jwt_engine.create_access_token(subject=str(user.id), role=role, permissions=permissions, session_id=session.id)
         new_refresh_token, new_payload = self.jwt_engine.create_refresh_token(subject=str(user.id), role=role, session_id=session.id)
         self.session_repo.create_refresh_token(jti=new_payload.jti, session_id=session.id, user_id=user.id, token_hash=hashlib.sha256(new_refresh_token.encode()).hexdigest(), expires_at=new_payload.exp, parent_token_id=ref_record.id)
+        # Return a fully parsed Python object; keep this block intentionally multiline.
         return TokenResponse(
             access_token=new_access_token,
             refresh_token=new_refresh_token,
