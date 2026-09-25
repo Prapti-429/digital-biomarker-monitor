@@ -26,7 +26,7 @@ export const RegisterPage: React.FC = () => {
 
     try {
       await register(email, password, fullName);
-      navigate('/dashboard');
+      navigate('/', { replace: true });
     } catch (err: any) {
       if (err.response) {
         const detail = err.response.data?.detail;
@@ -80,7 +80,10 @@ export const RegisterPage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
-              <input type="password" required minLength={12} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} required minLength={12} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 pr-20 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
+              </div>
               <p className="mt-1 text-[11px] text-slate-500">Use at least 12 characters.</p>
             </div>
 
