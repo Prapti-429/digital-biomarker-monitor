@@ -66,18 +66,23 @@ export const ReportsPage: React.FC = () => {
     setDownloading(report.title);
     try {
       const points = sortedHistory.slice(-report.days);
-      if (!points.length) throw new Error('No saved check-ins are available for this report yet.');
+      if (!points.length) throw new Error('No saved observations are available for this report yet.');
 
       const csv = buildCsv(report.title, points);
       const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+      // Use a real temporary anchor and keep the object URL alive long enough
+      // for Chromium/Firefox on hosted deployments to start the download.
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = report.fileName;
+      anchor.setAttribute('href', url);
+      anchor.setAttribute('download', report.fileName);
+      anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.setTimeout(() => {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }, 5000);
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'The report could not be downloaded.');
