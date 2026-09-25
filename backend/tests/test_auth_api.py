@@ -30,6 +30,23 @@ def test_user_registration_success(client: TestClient) -> None:
     assert "hashed_password" not in data
 
 
+def test_register_existing_email_resumes_account(client: TestClient, test_patient_user: User) -> None:
+    """The Register entry point must resume an existing account only with its password."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "patient@example.com",
+            "password": "SecurePassword123!",
+            "full_name": "Updated Name Should Not Replace Existing Identity",
+            "role": "patient",
+        },
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["id"] == str(test_patient_user.id)
+    assert data["email"] == "patient@example.com"
+
+
 def test_user_login_success(client: TestClient, test_patient_user: User) -> None:
     """Tests successful authentication and token receipt."""
     payload = {
