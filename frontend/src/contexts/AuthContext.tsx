@@ -120,14 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    // Revoke the server-side session when possible, but always clear local
-    // credentials even if the backend is temporarily unavailable.
-    void apiClient.post('/auth/logout').catch(() => undefined).finally(() => {
-      clearStoredAuth();
-      setToken(null);
-      setUser(null);
-      window.location.href = '/login';
-    });
+    // Fire-and-forget server revocation, then clear the browser session
+    // immediately. Logout must never leave the user waiting for a cold backend.
+    void apiClient.post('/auth/logout').catch(() => undefined);
+    clearStoredAuth();
+    setToken(null);
+    setUser(null);
+    window.location.href = '/login';
   };
 
   return (
