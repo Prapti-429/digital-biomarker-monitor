@@ -120,12 +120,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('nuvyra_token');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    setToken(null);
-    setUser(null);
-    window.location.href = '/login';
+    // Revoke the server-side session when possible, but always clear local
+    // credentials even if the backend is temporarily unavailable.
+    void apiClient.post('/auth/logout').catch(() => undefined).finally(() => {
+      clearStoredAuth();
+      setToken(null);
+      setUser(null);
+      window.location.href = '/login';
+    });
   };
 
   return (
