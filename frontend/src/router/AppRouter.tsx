@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate, useNavigate } from 'reac
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/common/ProtectedRoute';
 import { LanguageProvider } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const DashboardPage=lazy(()=>import('../pages/DashboardPage').then(m=>({default:m.DashboardPage})));
 const BiomarkersPage=lazy(()=>import('../pages/BiomarkersPage').then(m=>({default:m.BiomarkersPage})));
@@ -24,7 +25,7 @@ const FallbackLoader=()=> <div className="min-h-screen flex items-center justify
 const lazyElement=(Component:React.LazyExoticComponent<React.ComponentType>)=><Suspense fallback={<FallbackLoader/>}><Component/></Suspense>;
 const onboardingKey = (userId?: string) => userId ? `nuvyra_onboarding_complete:${userId}` : 'nuvyra_onboarding_complete';
 const FirstVisitRedirect: React.FC = () => {
-  const { user } = require('../contexts/AuthContext').useAuth();
+  const { user } = useAuth();
   return <Navigate to={localStorage.getItem(onboardingKey(user?.id)) === 'true' ? '/dashboard' : '/welcome'} replace />;
 };
 const WelcomeRoute: React.FC = () => {
