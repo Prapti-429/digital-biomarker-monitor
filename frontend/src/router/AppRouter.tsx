@@ -22,8 +22,17 @@ const RegisterPage=lazy(()=>import('../pages/RegisterPage').then(m=>({default:m.
 
 const FallbackLoader=()=> <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin"/></div>;
 const lazyElement=(Component:React.LazyExoticComponent<React.ComponentType>)=><Suspense fallback={<FallbackLoader/>}><Component/></Suspense>;
-const FirstVisitRedirect: React.FC = () => <Navigate to={localStorage.getItem('nuvyra_onboarding_complete') === 'true' ? '/dashboard' : '/welcome'} replace />;
-const WelcomeRoute: React.FC = () => { const navigate = useNavigate(); return <WelcomePage onComplete={() => { localStorage.setItem('nuvyra_onboarding_complete', 'true'); navigate('/dashboard', { replace: true }); }} />; };
+const onboardingKey = (userId?: string) => userId ? `nuvyra_onboarding_complete:${userId}` : 'nuvyra_onboarding_complete';
+const FirstVisitRedirect: React.FC = () => {
+  const { user } = require('../contexts/AuthContext').useAuth();
+  return <Navigate to={localStorage.getItem(onboardingKey(user?.id)) === 'true' ? '/dashboard' : '/welcome'} replace />;
+};
+const WelcomeRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = require('../contexts/AuthContext').useAuth();
+  const key = onboardingKey(user?.id);
+  return <WelcomePage onComplete={() => { localStorage.setItem(key, 'true'); navigate('/dashboard', { replace: true }); }} />;
+};
 
 const router=createBrowserRouter([
   {path:'/login',element:lazyElement(LoginPage)},
