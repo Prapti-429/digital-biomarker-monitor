@@ -33,19 +33,42 @@ class AuthenticationService:
         self.jwt_engine = jwt_engine
 
     def register_user(self, payload: UserRegisterRequest, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> User:
-        existing = self.user_repo.get_by_email(payload.email)
+        """
+        Create a new account, or resume an existing account from the Register
+        screen when the email and password already belong to that account.
+
+        This is intentionally password-gated: an email match alone never grants
+        access to an existing user's data and never creates a second identity.
+        """
+        normalized_email = str(payload.email).strip().lower()
+        existing = self.user_repo.get_by_email(normalized_email)
+
         if existing:
-            raise DuplicateEntityError("User", f"Email '{payload.email}' is already registered.")
+            # The Register screen doubles as a safe "returning participant"
+            # entry point. Only the existing password can unlock that account.
+            if not existing.is_active:
+                raise AccountDisabledException()
+            if not verify_password(payload.password, existing.hashed_password):
+                raise InvalidCredentialsException()
+            return existing
+
         role_value = payload.role.value if isinstance(payload.role, UserRole) else str(payload.role)
         user = self.user_repo.create_user({
-            "email": payload.email.lower().strip(),
+            "email": normalized_email,
             "hashed_password": hash_password(payload.password),
             "full_name": payload.full_name,
             "role": role_value,
             "is_active": True,
             "is_verified": False,
         })
-        self.audit_service.record_event(action="USER_REGISTER", user_id=user.id, actor_email=user.email, status="SUCCESS", ip_address=ip_address, user_agent=user_agent)
+        self.audit_service.record_event(
+            action="USER_REGISTER",
+            user_id=user.id,
+            actor_email=user.email,
+            status="SUCCESS",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
         return user
 
     def authenticate_user(self, payload: LoginRequest, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> TokenResponse:
