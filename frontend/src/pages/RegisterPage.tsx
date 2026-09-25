@@ -55,7 +55,7 @@ export const RegisterPage: React.FC = () => {
           Create NUVYRA Account
         </h2>
         <p className="mt-2 text-xs text-slate-400">
-          Join the longitudinal multimodal biomarker cohort.
+          New here? Create your account. Returning participant? Use the same email and password to continue your existing NUVYRA record.
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export const RegisterPage: React.FC = () => {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Full Name <span className="text-slate-500">(new accounts)</span></label>
               <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" placeholder="Alex Morgan" />
             </div>
 
@@ -84,17 +84,17 @@ export const RegisterPage: React.FC = () => {
                 <input type={showPassword ? 'text' : 'password'} required minLength={12} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 pr-20 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
                 <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">Use at least 12 characters.</p>
+              <p className="mt-1 text-[11px] text-slate-500">Use at least 12 characters. If this email already exists, your existing account will be resumed only after the password is verified.</p>
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-semibold py-2.5 rounded-xl text-sm transition-all shadow-md disabled:opacity-50">
-              {loading ? 'Creating Account...' : 'Register'}
+              {loading ? 'Checking account...' : 'Continue'}
             </button>
           </form>
 
           <div className="pt-4 border-t border-slate-800 text-center">
             <span className="text-xs text-slate-400">
-              Already registered?{' '}
+              Returning to NUVYRA?{' '}
               <Link to="/login" className="text-sky-400 hover:text-sky-300 font-semibold">Sign In</Link>
             </span>
           </div>
