@@ -30,7 +30,7 @@ const FirstVisitRedirect: React.FC = () => {
 };
 const WelcomeRoute: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = require('../contexts/AuthContext').useAuth();
+  const { user } = useAuth();
   const key = onboardingKey(user?.id);
   return <WelcomePage onComplete={() => { localStorage.setItem(key, 'true'); navigate('/dashboard', { replace: true }); }} />;
 };
