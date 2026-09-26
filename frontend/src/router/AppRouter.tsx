@@ -16,7 +16,6 @@ const PastHistoryPage=lazy(()=>import('../pages/PastHistoryPage').then(m=>({defa
 const NotificationsPage=lazy(()=>import('../pages/NotificationsPage').then(m=>({default:m.NotificationsPage})));
 const SettingsPage=lazy(()=>import('../pages/SettingsPage').then(m=>({default:m.SettingsPage})));
 const ProfilePage=lazy(()=>import('../pages/ProfilePage').then(m=>({default:m.ProfilePage})));
-const CompanionPage=lazy(()=>import('../pages/CompanionPage').then(m=>({default:m.CompanionPage})));
 const WelcomePage=lazy(()=>import('../components/NuvyraWelcome').then(m=>({default:m.default})));
 const LoginPage=lazy(()=>import('../pages/LoginPage').then(m=>({default:m.LoginPage})));
 const RegisterPage=lazy(()=>import('../pages/RegisterPage').then(m=>({default:m.RegisterPage})));
@@ -24,16 +23,8 @@ const RegisterPage=lazy(()=>import('../pages/RegisterPage').then(m=>({default:m.
 const FallbackLoader=()=> <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin"/></div>;
 const lazyElement=(Component:React.LazyExoticComponent<React.ComponentType>)=><Suspense fallback={<FallbackLoader/>}><Component/></Suspense>;
 const onboardingKey = (userId?: string) => userId ? `nuvyra_onboarding_complete:${userId}` : 'nuvyra_onboarding_complete';
-const FirstVisitRedirect: React.FC = () => {
-  const { user } = useAuth();
-  return <Navigate to={localStorage.getItem(onboardingKey(user?.id)) === 'true' ? '/dashboard' : '/welcome'} replace />;
-};
-const WelcomeRoute: React.FC = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const key = onboardingKey(user?.id);
-  return <WelcomePage onComplete={() => { localStorage.setItem(key, 'true'); navigate('/dashboard', { replace: true }); }} />;
-};
+const FirstVisitRedirect: React.FC = () => { const { user } = useAuth(); return <Navigate to={localStorage.getItem(onboardingKey(user?.id)) === 'true' ? '/dashboard' : '/welcome'} replace />; };
+const WelcomeRoute: React.FC = () => { const navigate = useNavigate(); const { user } = useAuth(); const key = onboardingKey(user?.id); return <WelcomePage onComplete={() => { localStorage.setItem(key, 'true'); navigate('/dashboard', { replace: true }); }} />; };
 
 const router=createBrowserRouter([
   {path:'/login',element:lazyElement(LoginPage)},
@@ -51,7 +42,6 @@ const router=createBrowserRouter([
       {path:'reports',element:lazyElement(ReportsPage)},
       {path:'past-history',element:lazyElement(PastHistoryPage)},
       {path:'notifications',element:lazyElement(NotificationsPage)},
-      {path:'companion',element:lazyElement(CompanionPage)},
       {path:'profile',element:lazyElement(ProfilePage)},
       {path:'settings',element:lazyElement(SettingsPage)}
     ]}
