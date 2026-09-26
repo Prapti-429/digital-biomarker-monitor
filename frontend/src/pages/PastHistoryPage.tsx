@@ -1,48 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../services/api';
 
-const info = 'This section helps you keep previous illnesses, prescriptions and reports together. The software can extract text from supported documents and create organization reminders, but it does not diagnose conditions or decide which tests you medically need.';
-
+const info = 'This section keeps previous health information and uploaded documents organized. NUVYRA extracts readable information for record organization; it does not diagnose conditions or decide treatment.';
 type HistoryData = { history: Array<any>; documents: Array<any>; reminders: Array<any> };
+
+const pretty = (key: string) => key.replace(/_/g, ' ').replace(/\b\w/g, x => x.toUpperCase());
 
 export const PastHistoryPage: React.FC = () => {
   const [data, setData] = useState<HistoryData>({ history: [], documents: [], reminders: [] });
-  const [illness, setIllness] = useState('');
-  const [details, setDetails] = useState('');
-  const [status, setStatus] = useState('');
-  const [documentType, setDocumentType] = useState('prescription');
-  const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [illness, setIllness] = useState(''); const [details, setDetails] = useState(''); const [status, setStatus] = useState('');
+  const [documentType, setDocumentType] = useState('prescription'); const [file, setFile] = useState<File | null>(null);
+  const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false); const [lastAnalysis, setLastAnalysis] = useState<any>(null);
 
   const load = async () => { try { const r = await apiClient.get('/past-history'); setData(r.data); } catch (e: any) { setMessage(e?.message || 'Unable to load past history.'); } };
   useEffect(() => { void load(); }, []);
 
-  const saveHistory = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!illness.trim()) return;
-    setBusy(true); setMessage('');
-    try { const form = new FormData(); form.append('illness_name', illness); form.append('details', details); form.append('current_status', status); await apiClient.post('/past-history/illness', form); setIllness(''); setDetails(''); setStatus(''); setMessage('Past history saved.'); await load(); }
-    catch (err: any) { setMessage(err?.message || 'Could not save history.'); } finally { setBusy(false); }
-  };
+  const saveHistory = async (e: React.FormEvent) => { e.preventDefault(); if (!illness.trim()) return; setBusy(true); setMessage(''); try { const form = new FormData(); form.append('illness_name', illness); form.append('details', details); form.append('current_status', status); await apiClient.post('/past-history/illness', form); setIllness(''); setDetails(''); setStatus(''); setMessage('Past history saved.'); await load(); } catch (err: any) { setMessage(err?.message || 'Could not save history.'); } finally { setBusy(false); } };
 
   const upload = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!file) return;
-    setBusy(true); setMessage('');
-    try { const form = new FormData(); form.append('document_type', documentType); form.append('file', file); const r = await apiClient.post('/past-history/documents', form); const tests = r.data?.analysis?.detected_tests || []; setMessage(tests.length ? `Document analyzed. Reminder(s) created for: ${tests.join(', ')}.` : 'Document uploaded and analyzed.'); setFile(null); await load(); }
-    catch (err: any) { setMessage(err?.message || 'Could not upload document.'); } finally { setBusy(false); }
+    e.preventDefault(); if (!file) return; setBusy(true); setMessage('Analyzing document…'); setLastAnalysis(null);
+    try {
+      const form = new FormData(); form.append('document_type', documentType); form.append('file', file);
+      const r = await apiClient.post('/past-history/documents', form); const analysis = r.data?.analysis || null; setLastAnalysis({ filename: r.data?.filename || file.name, analysis, reminders: r.data?.reminders_created || [] });
+      setMessage(analysis?.text_extracted ? 'Document analyzed successfully. Extracted information is shown below.' : 'Document processed, but no readable text was extracted.');
+      setFile(null); await load();
+    } catch (err: any) { setMessage(err?.message || 'Could not upload or analyze document.'); } finally { setBusy(false); }
   };
-
   const complete = async (id: string) => { try { await apiClient.post(`/past-history/reminders/${id}/complete`); await load(); } catch (e: any) { setMessage(e?.message || 'Could not update reminder.'); } };
 
   return <main className="mx-auto max-w-5xl space-y-6 p-6 text-white">
-    <header><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">Past History</h1><button title={info} aria-label="Past history information" className="rounded-full border px-2 text-xs">i</button></div><p className="mt-2 text-slate-400">Tell NUVYRA about previous illnesses and keep your latest prescription and reports organized.</p></header>
+    <header><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">Past History</h1><button title={info} aria-label="Past history information" className="rounded-full border px-2 text-xs">i</button></div><p className="mt-2 text-slate-400">Tell NUVYRA about previous illnesses and upload prescriptions and reports for structured record extraction.</p></header>
     {message && <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm">{message}</div>}
     <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-4 text-xl font-semibold">Previous illness or health history</h2><form onSubmit={saveHistory} className="grid gap-3 md:grid-cols-2"><input value={illness} onChange={e => setIllness(e.target.value)} placeholder="Example: Asthma" className="rounded-xl bg-slate-950 p-3" required /><input value={status} onChange={e => setStatus(e.target.value)} placeholder="Current status (optional)" className="rounded-xl bg-slate-950 p-3" /><textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="Anything you want the software to remember (optional)" className="rounded-xl bg-slate-950 p-3 md:col-span-2" rows={3} /><button disabled={busy} className="rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 disabled:opacity-50">Save history</button></form></section>
-    <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-2 text-xl font-semibold">Upload prescription or report</h2><p className="mb-4 text-sm text-slate-400">PDF and text documents can be read automatically. Scanned/image-only documents may require review if no readable text is available.</p><form onSubmit={upload} className="space-y-3"><select value={documentType} onChange={e => setDocumentType(e.target.value)} className="rounded-xl bg-slate-950 p-3"><option value="prescription">Latest prescription</option><option value="report">Latest report</option><option value="lab_report">Lab report</option><option value="test_report">Test report</option></select><input type="file" accept=".pdf,.txt,.csv,image/*" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full rounded-xl border border-slate-700 p-3" /><button disabled={busy || !file} className="rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 disabled:opacity-50">Upload & analyze</button></form></section>
+    <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-2 text-xl font-semibold">Upload prescription or report</h2><p className="mb-4 text-sm text-slate-400">Click <b className="text-white">Upload & analyze</b>. NUVYRA reads supported documents, extracts structured information and shows exactly what it found below.</p><form onSubmit={upload} className="space-y-3"><select value={documentType} onChange={e => setDocumentType(e.target.value)} className="rounded-xl bg-slate-950 p-3"><option value="prescription">Latest prescription</option><option value="report">Latest report</option><option value="lab_report">Lab report</option><option value="test_report">Test report</option></select><input type="file" accept=".pdf,.txt,.csv,image/*" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full rounded-xl border border-slate-700 p-3" /><button disabled={busy || !file} className="rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 disabled:opacity-50">{busy ? 'Analyzing…' : 'Upload & analyze'}</button></form></section>
+    {lastAnalysis && <section className="rounded-2xl border border-teal-500/30 bg-teal-950/10 p-5 space-y-5"><div><h2 className="text-xl font-semibold">Analysis of {lastAnalysis.filename}</h2><p className="text-sm text-teal-300 mt-1">The following is what NUVYRA actually extracted from this upload.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-slate-900 p-4"><div className="text-xs text-slate-500">Readable text</div><b className="mt-1 block">{lastAnalysis.analysis?.text_extracted ? 'Yes' : 'No'}</b></div><div className="rounded-xl bg-slate-900 p-4"><div className="text-xs text-slate-500">Tests mentioned</div><b className="mt-1 block">{lastAnalysis.analysis?.detected_tests?.length || 0}</b></div><div className="rounded-xl bg-slate-900 p-4"><div className="text-xs text-slate-500">Dates found</div><b className="mt-1 block">{lastAnalysis.analysis?.dates_found?.length || 0}</b></div></div>{lastAnalysis.analysis?.ai_analysis?.summary && <div className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h3 className="font-semibold">Document summary</h3><p className="mt-2 text-sm leading-6 text-slate-300">{lastAnalysis.analysis.ai_analysis.summary}</p></div>}<div className="grid gap-4 md:grid-cols-2">{[['Detected tests',lastAnalysis.analysis?.detected_tests],['Possible medication lines',lastAnalysis.analysis?.possible_medication_lines],['Dates found',lastAnalysis.analysis?.dates_found],['Follow-up mentions',lastAnalysis.analysis?.ai_analysis?.follow_up_mentions]].map(([title,items])=><div key={String(title)} className="rounded-xl bg-slate-900 p-4"><h3 className="font-semibold">{title}</h3>{Array.isArray(items)&&items.length?<ul className="mt-2 space-y-1 text-sm text-slate-300">{items.map((x:any,i:number)=><li key={i}>• {String(x)}</li>)}</ul>:<p className="mt-2 text-sm text-slate-500">None identified.</p>}</div>)}</div>{lastAnalysis.analysis?.extracted_text_preview && <div className="rounded-xl bg-slate-950 p-4"><h3 className="font-semibold">Extracted text preview</h3><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs leading-5 text-slate-400">{lastAnalysis.analysis.extracted_text_preview}</pre></div>}</section>}
+    <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-4 text-xl font-semibold">Saved documents</h2>{data.documents.length ? data.documents.map(x => <div key={x.id} className="mb-3 rounded-xl border border-slate-700 p-4"><div className="flex justify-between gap-3"><strong>{x.filename}</strong><span className="text-xs text-slate-500">{x.type}</span></div><div className="mt-2 text-xs text-slate-500">{x.analysis?.text_extracted ? 'Text extracted' : 'No readable text'} · {x.analysis?.detected_tests?.length || 0} test mentions · {x.analysis?.dates_found?.length || 0} dates</div></div>) : <p className="text-slate-500">No documents uploaded yet.</p>}</section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-4 text-xl font-semibold">Saved history</h2>{data.history.length ? data.history.map(x => <div key={x.id} className="mb-2 rounded-xl border border-slate-700 p-3"><strong>{x.illness_name}</strong>{x.current_status && <span className="ml-2 text-sm text-slate-400">{x.current_status}</span>}<p className="text-sm text-slate-400">{x.details}</p></div>) : <p className="text-slate-500">No previous history added yet.</p>}</section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h2 className="mb-4 text-xl font-semibold">Notifications & test reminders</h2>{data.reminders.length ? data.reminders.map(x => <div key={x.id} className="mb-2 flex items-start justify-between gap-3 rounded-xl border border-amber-800/60 bg-amber-950/20 p-3"><div><strong>{x.title}</strong><p className="text-sm text-slate-300">{x.message}</p>{x.due_date && <p className="text-xs text-slate-500">Reminder date: {x.due_date}</p>}</div><button onClick={() => void complete(x.id)} className="rounded-lg border px-3 py-2 text-sm">Done</button></div>) : <p className="text-slate-500">No pending reminders.</p>}</section>
-    <section className="rounded-2xl border border-slate-700 p-5 text-sm text-slate-400"><strong className="text-white">About document analysis:</strong> NUVYRA extracts readable information to organize your record and identify possible test mentions. It does not determine whether a test is necessary, interpret results as a diagnosis, or replace your clinician.</section>
   </main>;
 };
-
 export default PastHistoryPage;
