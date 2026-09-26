@@ -1,6 +1,6 @@
 """Pydantic response schemas for uploaded assets."""
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 import uuid
 from pydantic import BaseModel, ConfigDict
 
@@ -15,6 +15,7 @@ class FileUploadResponse(BaseModel):
     mime_type: str
     processing_status: str
     notes: Optional[str] = None
+    analysis: Optional[dict[str, Any]] = None
     created_at: datetime
 
 
